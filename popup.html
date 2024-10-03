@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Privacy Analyzer</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+            margin: 10px 0;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button:hover:enabled {
+            background-color: #45a049;
+        }
+    </style>
+    <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+    <h3>Privacy Analyzer</h3>
+
+    <button id="analyzePage">Analyze Page</button>
+    <button id="downloadReport" disabled>Download Report</button>
+    <script src="scripts/popup.js"></script>
+</body>
+</html>
