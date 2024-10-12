@@ -9,9 +9,12 @@ document.addEventListener('DOMContentLoaded', function() {
     analyzePageBtn.addEventListener('click', function() {
         chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
             chrome.tabs.sendMessage(tabs[0].id, { type: 'analyzePage' }, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.error(chrome.runtime.lastError.message);  // Log any errors from the messaging system
+                    return;
+                }
                 if (response && response.analysisComplete) {
-                    // Enable the download button after analysis is complete
-                    downloadReportBtn.disabled = false;
+                    downloadReportBtn.disabled = false;  // Enable the download button once analysis is complete
                     console.log('Page analysis complete');
                 } else {
                     console.error('Failed to analyze the page.');
@@ -22,26 +25,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Download report button click
     downloadReportBtn.addEventListener('click', function() {
-        chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'requestDetailedReport' }, function(response) {
-                if (response && response.report) {
-                    downloadReport(response.report);
-                } else {
-                    console.error('Failed to get the report.');
-                }
-            });
+        // Send a message to the background script (analysis.js) to generate the report
+        chrome.runtime.sendMessage({ type: 'requestDetailedReport' }, function(response) {
+            if (chrome.runtime.lastError) {
+                console.error(chrome.runtime.lastError.message);
+                return;
+            }
+    
+            if (response && response.report) {
+                // Create a Blob and trigger the download
+                const blob = new Blob([response.report], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+    
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'privacy_analysis_report.html';
+                a.click();
+                window.URL.revokeObjectURL(url);
+    
+                console.log('Report downloaded successfully.');
+            } else {
+                console.error('Failed to generate or download the report.');
+            }
         });
     });
 });
-
-// Function to download the report as a text file
-function downloadReport(reportData) {
-    const blob = new Blob([reportData], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'privacy_analysis_report.txt';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}

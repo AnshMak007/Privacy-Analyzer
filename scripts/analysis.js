@@ -1,15 +1,18 @@
+// Function to generate the detailed report as HTML content
+
+
 function generateDetailedReport(data) {
     let reportContent = `
     <html>
     <head>
         <title>Privacy Analysis Report</title>
         <style>
-            body { font-family: Arial, sans-serif; }
+            body { font-family: Arial, sans-serif; padding: 20px; }
             h1 { color: #2c3e50; }
             h2, h3 { color: #34495e; }
             ul { list-style-type: none; padding: 0; }
             li { background-color: #e3f2fd; padding: 10px; margin: 5px 0; border-radius: 4px; }
-            .category { font-weight: bold; }
+            .category { font-weight: bold; color: #1a237e; }
         </style>
     </head>
     <body>
@@ -34,7 +37,7 @@ function generateDetailedReport(data) {
     return reportContent;
 }
 
-// Download as HTML report
+// Function to download the detailed report as an HTML file
 function downloadDetailedReport() {
     chrome.storage.local.get('pageAnalysis', function(result) {
         if (result.pageAnalysis) {
@@ -53,8 +56,13 @@ function downloadDetailedReport() {
     });
 }
 
+// Listening for messages from popup.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'requestDetailedReport') {
-        downloadDetailedReport();
+        console.log('Received message in analysis.js:', message);
+        downloadDetailedReport(); // Call the function to download the report
+        sendResponse({ success: true }); // Send a success response
+    } else {
+        sendResponse({ success: false }); // Send a failure response for unrecognized messages
     }
 });
