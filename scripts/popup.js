@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Download report button click
     downloadReportBtn.addEventListener('click', function() {
-        // Send a message to the background script (analysis.js) to generate the report
+        // Send a message to the background script to request the detailed report
         chrome.runtime.sendMessage({ type: 'requestDetailedReport' }, function(response) {
             if (chrome.runtime.lastError) {
                 console.error(chrome.runtime.lastError.message);
