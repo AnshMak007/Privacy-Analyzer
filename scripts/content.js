@@ -1,4 +1,12 @@
 console.log("Content script loaded.");
+let maliciousIndicators = [];
+fetch(chrome.runtime.getURL('maliciousIndicators.json'))
+    .then(response => response.json())
+    .then(data => {
+        maliciousIndicators = data.malicious_indicators; // Store the indicators in the array
+        console.log('Malicious indicators loaded:', maliciousIndicators);
+    })
+    .catch(error => console.error('Error loading malicious indicators:', error));
 
 // Listener for messages from background or popup scripts
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
@@ -31,7 +39,6 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
                 scripts: scripts,
                 trackers: trackers
             });
-            // console.log("Detected scripts:", scripts);
             sendResponse({ analysisComplete: true });
         });
 
@@ -68,9 +75,20 @@ function analyzeScripts() {
             return scriptDetails;
         });
 }
+// Function to detect malicious scripts based on loaded indicators
+function detectMaliciousScripts(scripts) {
+    const detectedMaliciousScripts = scripts.filter(script => 
+        maliciousIndicators.some(indicator => script.src.includes(indicator))
+    );
 
-// Analyze cookies on the page
-// Analyze cookies on the page
+    if (detectedMaliciousScripts.length === 0) {
+        return null; // No malicious scripts detected
+    }
+
+    return detectedMaliciousScripts.map(script => script.src); // Return the array of detected scripts
+}
+
+// Analyze cookies on the page with improved logic
 function analyzeCookies() {
     const cookieCategories = {
         advertising: ['doubleclick.net', 'ads.twitter.com', 'adroll.com'],
@@ -90,10 +108,24 @@ function analyzeCookies() {
             name: name || 'N/A',
             domain: cookieDomain,
             expires: extractCookieExpiry(cookieValue),
+            secure: isCookieSecure(cookieValue),  // Check if cookie is secure
+            httpOnly: isHttpOnly(cookieValue),    // Check if cookie is HttpOnly (assumed false here)
             type: determineCookieType(name, cookieCategories) // Get type based on cookie name
         };
         return cookieProps;
     });
+}
+
+// Function to determine if a cookie is secure
+function isCookieSecure(cookie) {
+    // Extract the 'secure' attribute from the cookie string if it's available
+    const secureFlag = cookie.match(/secure/i); // Check if 'secure' is in the cookie string
+    return secureFlag !== null;  // Return true if 'secure' flag is present
+}
+
+function isHttpOnly(cookie) {
+    // JavaScript cannot access HttpOnly cookies, so assume false
+    return false;
 }
 
 // Determine the type of the cookie based on its name
