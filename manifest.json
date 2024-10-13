@@ -19,6 +19,12 @@
   "background": {
     "service_worker": "scripts/background.js"  
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["scripts/maliciousIndicators.json"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -36,4 +42,5 @@
       "js": ["scripts/content.js"]
     }
   ]
+  
 }
