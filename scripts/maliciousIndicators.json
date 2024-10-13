@@ -1,0 +1,33 @@
+{
+    "malicious_indicators": [
+        "malicious.com",
+        "badsite.net",
+        "untrusted.org",
+        "examplebadsite.com",
+        "malware.site",
+        "fakesite.io",
+        "phishingsite.xyz",
+        "scamsite.co",
+        "hackernews.site",
+        "ransomwaredomain.info",
+        "maliciousscript.org",
+        "attackersite.com",
+        "clickbaitlink.com",
+        "spyware.site",
+        "adware.com",
+        "trojan-site.net",
+        "fakeupdates.com",
+        "virus-attack.xyz",
+        "data-breach.net",
+        "keylogger.site",
+        "unverifiedsource.io",
+        "phishingexample.com",
+        "insecurepayment.net",
+        "malwarebytes.org",
+        "spamdomain.com",
+        "deceptive-link.com",
+        "malicioussoftware.org",
+        "infected-download.com",
+        "suspiciousactivity.net"
+    ]
+}
