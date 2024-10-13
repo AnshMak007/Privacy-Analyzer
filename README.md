@@ -34,14 +34,6 @@ The **Privacy Analysis Chrome Extension** helps users analyze web pages for pote
 - `content.js`: Content script injected into web pages for analysis.
 - `popup.html`: The HTML file for the extension’s user interface (if applicable).
 
-## Contributing
-
-Contributions are welcome! If you have suggestions for improvements or new features, please open an issue or submit a pull request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
 ## Acknowledgments
 
 - Thanks to [Chrome Extensions Documentation](https://developer.chrome.com/docs/extensions/mv3/) for providing detailed guidance on developing Chrome extensions.
