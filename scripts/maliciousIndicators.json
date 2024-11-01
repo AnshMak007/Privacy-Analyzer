@@ -1,5 +1,4 @@
-{
-    "malicious_indicators": [
+    [
         "malicious.com",
         "badsite.net",
         "untrusted.org",
@@ -30,4 +29,4 @@
         "infected-download.com",
         "suspiciousactivity.net"
     ]
-}
+
