@@ -1,195 +1,178 @@
-console.log("Content script loaded.");
+// console.log("Content script loaded.");
+// let maliciousIndicators = [];
+// fetch(chrome.runtime.getURL('maliciousIndicators.json'))
+//     .then(response => response.json())
+//     .then(data => {
+//         maliciousIndicators = data.malicious_indicators; 
+//     })
+//     .catch(error => console.error('Error loading malicious indicators:', error));
+
+// chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+//     if (message.type === 'analyzePage') {
+//         const pageURL = message.pageURL || window.location.href;
+//         const scripts = analyzeScripts();
+//         const cookies = analyzeCookies();
+//         const trackers = detectTrackers();
+
+//         // chrome.storage.local.set({
+//         //     pageAnalysis: { pageURL: pageURL, scripts: scripts, cookies: cookies, trackers: trackers }
+//         // }, () => {
+//         //     chrome.runtime.sendMessage({ type: 'categorizedData', pageURL: pageURL, cookies: cookies, scripts: scripts, trackers: trackers });
+//         //     sendResponse({ analysisComplete: true });
+//         // });
+//         // return true;
+//         chrome.storage.local.set({
+//             pageAnalysis: { pageURL: pageURL, scripts: scripts, cookies: cookies, trackers: trackers }
+//           }, () => {
+//             console.log("Page analysis stored:", { pageURL, scripts, cookies, trackers });
+//             chrome.runtime.sendMessage({ type: 'categorizedData', pageURL: pageURL, cookies: cookies, scripts: scripts, trackers: trackers });
+//             sendResponse({ analysisComplete: true });
+//           });
+//           return true;
+//     }
+// });
+
+// function analyzeScripts() {
+//     return Array.from(document.scripts)
+//         .filter(script => script.src)
+//         .map(script => ({
+//             src: script.src,
+//             attributes: { async: script.hasAttribute('async'), defer: script.hasAttribute('defer'), crossorigin: script.getAttribute('crossorigin') || 'N/A' },
+//             suspicious: detectSuspiciousPatterns(script.src)
+//         }));
+// }
+
+// function detectSuspiciousPatterns(src) {
+//     return { obfuscated: /[A-Za-z0-9+/=]{20,}/.test(src), untrusted: maliciousIndicators.some(indicator => src.includes(indicator)) };
+// }
+
+// function analyzeCookies() {
+//     return document.cookie.split(';').map(cookie => {
+//         const [name, value] = cookie.trim().split('=');
+//         return { name, value, domain: extractDomain(cookie), secure: isSecure(cookie), httpOnly: isHttpOnly(cookie) };
+//     });
+// }
+
+// function isSecure(cookie) { return /secure/i.test(cookie); }
+// function isHttpOnly(cookie) { return false; }
+// function extractDomain(cookie) { const domainMatch = cookie.match(/domain=([^;]*)/i); return domainMatch ? domainMatch[1] : 'N/A'; }
+
+// function detectTrackers() {
+//     const trackerDomains = ["google-analytics.com", "facebook.com"];
+//     return Array.from(document.querySelectorAll('script')).map(script => {
+//         const url = new URL(script.src);
+//         return trackerDomains.some(domain => url.hostname.includes(domain)) ? { domain: url.hostname } : null;
+//     }).filter(Boolean);
+// }
+// content.js
+
 let maliciousIndicators = [];
-fetch(chrome.runtime.getURL('maliciousIndicators.json'))
-    .then(response => response.json())
-    .then(data => {
-        maliciousIndicators = data.malicious_indicators; // Store the indicators in the array
-        console.log('Malicious indicators loaded:', maliciousIndicators);
+
+// Load malicious indicators from the JSON file
+fetch(chrome.runtime.getURL('scripts/maliciousIndicators.json'))
+    .then((response) => response.json())
+    .then((data) => {
+        maliciousIndicators = data;
+        console.log("Malicious indicators loaded:", maliciousIndicators);
+        
+        // Start analysis only after malicious indicators are loaded
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'analyzePage') {
+                analyzePage(sendResponse); // Pass sendResponse to handle async response
+                return true; // Keep the message channel open for async response
+            } else if (message.type === 'downloadReport') {
+                // Request the background script to download the report
+                chrome.runtime.sendMessage({ type: 'downloadReport' }, (response) => {
+                    if (response.error) {
+                        console.error("Failed to download report:", response.error);
+                        sendResponse({ success: false, error: response.error });
+                    } else {
+                        console.log("Report download initiated.");
+                        sendResponse({ success: true });
+                    }
+                });
+                return true; // Keep the message channel open for async response
+            }
+        });
     })
-    .catch(error => console.error('Error loading malicious indicators:', error));
+    .catch((error) => {
+        console.error("Failed to load malicious indicators:", error);
+    });
 
-// Listener for messages from background or popup scripts
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
-    console.log("Message received in content script:", message);  // Check if the message is received
-
-    if (message.type === 'analyzePage') {
-        const pageURL = message.pageURL || window.location.href; // Capture URL from message or fallback to window URL
-
-        // Analyze the page and collect scripts, cookies, and trackers
-        const scripts = analyzeScripts();
-        const cookies = analyzeCookies(); // Cookies are already categorized here
-        const trackers = detectTrackers();
-
-        // Save analysis data to chrome.storage.local
-        chrome.storage.local.set({
-            pageAnalysis: {
-                pageURL: pageURL,  // Store the page URL as part of the analysis
-                scripts: scripts,
-                cookies: cookies,
-                trackers: trackers
-            }
-        }, () => {
-            console.log('Page analysis saved.');
-
-            // Send categorized data to background.js
-            chrome.runtime.sendMessage({
-                type: 'categorizedData',
-                pageURL: pageURL,
-                cookies: cookies,
-                scripts: scripts,
-                trackers: trackers
-            });
-            sendResponse({ analysisComplete: true });
-        });
-
-        return true; // Keeps the message channel open for async response
-    }
-
-    // Handle report request
-    if (message.type === 'requestDetailedReport') {
-        chrome.storage.local.get('pageAnalysis', function(result) {
-            console.log('Data retrieved from storage:', result.pageAnalysis); 
-            if (result.pageAnalysis) {
-                sendResponse({ report: JSON.stringify(result.pageAnalysis, null, 2) });
-            } else {
-                sendResponse({ report: null });
-            }
-        });
-        return true; // Keeps the message channel open for async response
-    }
-});
-
-// Analyze scripts on the page
-function analyzeScripts() {
-    return Array.from(document.scripts)
-        .filter(script => script.src) // Exclude inline scripts
-        .map(script => {
-            const scriptDetails = {
-                src: script.src,
-                attributes: {
-                    async: script.hasAttribute('async'),
-                    defer: script.hasAttribute('defer'),
-                    crossorigin: script.getAttribute('crossorigin') || 'N/A',
-                }
-            };
-            return scriptDetails;
-        });
-}
-// Function to detect malicious scripts based on loaded indicators
-function detectMaliciousScripts(scripts) {
-    const detectedMaliciousScripts = scripts.filter(script => 
-        maliciousIndicators.some(indicator => script.src.includes(indicator))
-    );
-
-    if (detectedMaliciousScripts.length === 0) {
-        return null; // No malicious scripts detected
-    }
-
-    return detectedMaliciousScripts.map(script => script.src); // Return the array of detected scripts
+// Function to collect information about scripts on the page
+function collectScripts() {
+    const scripts = Array.from(document.scripts).map(script => ({
+        src: script.src || 'Inline script',
+        async: script.async,
+        defer: script.defer,
+        crossorigin: script.crossOrigin || null
+    }));
+    return scripts;
 }
 
-// Analyze cookies on the page with improved logic
-function analyzeCookies() {
-    const cookieCategories = {
-        advertising: ['doubleclick.net', 'ads.twitter.com', 'adroll.com'],
-        analytics: ['google-analytics.com', 'mixpanel.com', 'quantserve.com', 'hotjar.com'],
-        socialMedia: ['facebook.com', 'linkedin.com'],
-        research: ['scorecardresearch.com'],
-        session: ['session'], // Example of session cookies
-        // Add more categories as needed
-    };
-
-    return document.cookie.split(';').map(cookie => {
-        const cookieValue = cookie.trim();
-        const [name, value] = cookieValue.split('=');
-        const cookieDomain = extractCookieDomain(cookieValue);
-        const cookieProps = {
-            value: cookieValue,
-            name: name || 'N/A',
-            domain: cookieDomain,
-            expires: extractCookieExpiry(cookieValue),
-            secure: isCookieSecure(cookieValue),  // Check if cookie is secure
-            httpOnly: isHttpOnly(cookieValue),    // Check if cookie is HttpOnly (assumed false here)
-            type: determineCookieType(name, cookieCategories) // Get type based on cookie name
+// Function to collect cookies on the page
+function collectCookies() {
+    return document.cookie.split(";").map(cookie => {
+        const [name, ...rest] = cookie.split("=");
+        return {
+            name: name.trim(),
+            value: rest.join("=").trim(),
+            secure: document.location.protocol === 'https:',
+            httpOnly: false // Cannot access httpOnly attribute from JS
         };
-        return cookieProps;
     });
 }
 
-// Function to determine if a cookie is secure
-function isCookieSecure(cookie) {
-    // Extract the 'secure' attribute from the cookie string if it's available
-    const secureFlag = cookie.match(/secure/i); // Check if 'secure' is in the cookie string
-    return secureFlag !== null;  // Return true if 'secure' flag is present
+// Function to collect tracker information
+function collectTrackers() {
+    const trackerDomains = ["example-tracker.com", "another-tracker.com"];
+    return trackerDomains.map(domain => ({
+        name: domain,
+        type: "Analytics",
+        description: "Used for tracking and analytics."
+    }));
 }
 
-function isHttpOnly(cookie) {
-    // JavaScript cannot access HttpOnly cookies, so assume false
-    return false;
-}
-
-// Determine the type of the cookie based on its name
-function determineCookieType(name, categories) {
-    if (name.includes('session')) {
-        return 'Session'; // Example for session cookies
-    }
-
-    for (const [type, domainList] of Object.entries(categories)) {
-        if (domainList.some(domain => name.includes(domain))) {
-            return type.charAt(0).toUpperCase() + type.slice(1); // Capitalize type
-        }
-    }
-    return 'Other'; // Default type if no match
-}
-
-// Extract domain from the cookie string (if available)
-function extractCookieDomain(cookie) {
-    const domainMatch = cookie.match(/domain=([^;]*)/i);
-    return domainMatch ? domainMatch[1] : 'N/A';
-}
-
-// Extract expiration from the cookie string (if available)
-function extractCookieExpiry(cookie) {
-    const expiryMatch = cookie.match(/expires=([^;]*)/i);
-    return expiryMatch ? expiryMatch[1] : 'Session Only';
-}
-
-// Detect trackers by checking external resources and known tracker domains
-function detectTrackers() {
-    const trackers = [];
-    const trackerDomains = [
-        { domain: 'google-analytics.com', type: 'Analytics', description: 'Google Analytics for tracking user interactions.' },
-        { domain: 'facebook.com', type: 'Social Media', description: 'Facebook tracking for social media interactions.' },
-        { domain: 'doubleclick.net', type: 'Advertising', description: 'DoubleClick for ad serving and tracking.' },
-        { domain: 'ads.twitter.com', type: 'Advertising', description: 'Twitter Ads for advertisement tracking.' },
-        { domain: 'scorecardresearch.com', type: 'Research', description: 'Scorecard Research for web traffic analysis.' },
-        { domain: 'quantserve.com', type: 'Analytics', description: 'Quantcast for audience measurement.' },
-        { domain: 'linkedin.com', type: 'Social Media', description: 'LinkedIn tracking for social interactions.' },
-        { domain: 'hotjar.com', type: 'Analytics', description: 'Hotjar for user behavior analytics.' },
-        { domain: 'mixpanel.com', type: 'Analytics', description: 'Mixpanel for product analytics.' },
-        { domain: 'adroll.com', type: 'Advertising', description: 'AdRoll for retargeting ads.' }
-    ];
-
-    const resources = Array.from(document.querySelectorAll('img, script, iframe, link')).map(elem => elem.src || elem.href || '');
-
-    resources.forEach(resource => {
-        if (resource) {
-            try {
-                const url = new URL(resource);
-                const domain = url.hostname;
-                const matchedTracker = trackerDomains.find(tracker => domain.includes(tracker.domain));
-                if (matchedTracker) {
-                    trackers.push({
-                        domain: domain,
-                        type: matchedTracker.type,
-                        description: matchedTracker.description
-                    });
-                }
-            } catch (error) {
-                console.error("Error parsing resource URL:", resource, error);
-            }
-        }
+// Analyze scripts for phishing, cookie theft, and untrusted network calls
+function analyzeScripts(scripts) {
+    const phishing = [];
+    const cookieTheft = [];
+    const untrustedCalls = [];
+    
+    scripts.forEach(script => {
+        const src = script.src.toLowerCase();
+        if (maliciousIndicators.some(indicator => src.includes(indicator))) phishing.push(script.src);
+        if (src.includes("cookie")) cookieTheft.push(script.src);
+        if (src.includes("networkcall")) untrustedCalls.push(script.src);
     });
 
-    return trackers.length ? trackers : [{ domain: 'None', type: 'None', description: 'No Trackers Detected' }];
+    return { phishing, cookieTheft, untrustedCalls };
+}
+
+// Function to analyze the page and send data to local storage
+function analyzePage(sendResponse) {
+    const scripts = collectScripts();
+    const cookies = collectCookies();
+    const trackers = collectTrackers();
+
+    const suspiciousActivity = analyzeScripts(scripts);
+
+    // Save analysis data in local storage for report generation
+    chrome.storage.local.set({
+        pageAnalysis: {
+            url: window.location.href,
+            scripts,
+            cookies,
+            trackers,
+            suspiciousActivity
+        }
+    }, () => {
+        if (chrome.runtime.lastError) {
+            console.error("Error saving page analysis:", chrome.runtime.lastError.message);
+            sendResponse({ success: false, message: "Failed to save analysis." });
+        } else {
+            console.log("Page analysis saved.");
+            sendResponse({ success: true, message: "Page analysis complete." });
+        }
+    });
 }
