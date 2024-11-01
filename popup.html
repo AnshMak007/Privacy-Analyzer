@@ -32,16 +32,34 @@
         button:hover:enabled {
             background-color: #45a049;
         }
+        #loading {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        #errorMessage {
+            color: red;
+            display: none;
+            margin: 10px 0;
+        }
+        #successMessage {
+            color: green;
+            display: none;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
     <h3>Privacy Analyzer</h3>
 
-    <button id="analyzePage">Analyze Page</button>
-    <button id="downloadReport" disabled>Download Report</button>
+    <button id="analyzeButton">Analyze Page</button>
+    <button id="downloadButton" disabled>Download Report</button>
+    <div id="loading">Analyzing...</div>
+    <div id="errorMessage"></div>
+    <div id="successMessage"></div> <!-- Added success message element -->
 
-    <!-- Ensure you load the popup.js first, then background.js -->
     <script src="scripts/popup.js"></script>
-    <script src="scripts/background.js"></script>
 </body>
 </html>
