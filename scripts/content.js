@@ -81,6 +81,42 @@ async function fetchEasyListTrackers() {
     }
 }
 
+function monitorNetworkRequests(trackerDomains) {
+    const scriptTrackerMapping = {};
+
+    // Proxy fetch to monitor network requests
+    window.fetch = new Proxy(window.fetch, {
+        apply: function (target, thisArg, args) {
+            const url = args[0];
+            if (trackerDomains.some(domain => url.includes(domain))) {
+                const scriptName = document.currentScript?.src || "Inline script";
+                if (!scriptTrackerMapping[scriptName]) {
+                    scriptTrackerMapping[scriptName] = [];
+                }
+                scriptTrackerMapping[scriptName].push(url);
+                console.log(`Tracker detected (fetch): ${url} by ${scriptName}`);
+            }
+            return Reflect.apply(target, thisArg, args);
+        }
+    });
+
+    // Proxy XMLHttpRequest to monitor network requests
+    const originalXhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        if (trackerDomains.some(domain => url.includes(domain))) {
+            const scriptName = document.currentScript?.src || "Inline script";
+            if (!scriptTrackerMapping[scriptName]) {
+                scriptTrackerMapping[scriptName] = [];
+            }
+            scriptTrackerMapping[scriptName].push(url);
+            console.log(`Tracker detected (XMLHttpRequest): ${url} by ${scriptName}`);
+        }
+        return originalXhrOpen.apply(this, [method, url, ...rest]);
+    };
+
+    return scriptTrackerMapping;
+}
+
 
 // Combine local and EasyList trackers
 async function getCombinedTrackers() {
@@ -92,20 +128,41 @@ async function getCombinedTrackers() {
 
     const easyListTrackers = await fetchEasyListTrackers();
 
-    // Combine trackers
     const combinedTrackers = [
         ...localTrackers,
         ...easyListTrackers.map(domain => ({
             domain,
-            type: "Miscellaneous",
-            description: "Tracker domain from EasyList.",
         })),
     ];
 
     return combinedTrackers;
 }
 
+
 // Collect trackers from scripts on the page
+// async function collectTrackers() {
+//     const trackerPatterns = await getCombinedTrackers();
+//     const detectedTrackers = [];
+//     const scripts = Array.from(document.scripts);
+
+//     scripts.forEach(script => {
+//         if (script.src) {
+//             const cleanSrc = new URL(script.src).hostname;
+//             trackerPatterns.forEach(tracker => {
+//                 const pattern = new RegExp(tracker.domain, "i");
+//                 if (pattern.test(cleanSrc)) {
+//                     detectedTrackers.push({
+//                         domain: tracker.domain,
+//                         source: script.src // Include the source script responsible for the tracker
+//                     });
+//                     console.log(`Tracker detected: ${tracker.domain} added by ${script.src}`);
+//                 }
+//             });
+//         }
+//     });
+
+//     return detectedTrackers;
+// }
 async function collectTrackers() {
     const trackerPatterns = await getCombinedTrackers();
     const detectedTrackers = [];
@@ -117,11 +174,19 @@ async function collectTrackers() {
             trackerPatterns.forEach(tracker => {
                 const pattern = new RegExp(tracker.domain, "i");
                 if (pattern.test(cleanSrc)) {
-                    detectedTrackers.push({
-                        domain: tracker.domain,
-                        type: tracker.type,
-                        description: tracker.description,
-                    });
+                    // Find existing tracker or add a new one
+                    let existingTracker = detectedTrackers.find(t => t.domain === tracker.domain);
+
+                    if (!existingTracker) {
+                        existingTracker = {
+                            domain: tracker.domain,
+                            scripts: [],
+                        };
+                        detectedTrackers.push(existingTracker);
+                    }
+
+                    // Add the script to the tracker
+                    existingTracker.scripts.push(script.src || "Inline script");
                 }
             });
         }
@@ -129,6 +194,8 @@ async function collectTrackers() {
 
     return detectedTrackers;
 }
+
+
 
 // Analyze scripts for phishing, cookie theft, untrusted network calls, and behavioral patterns
 async function analyzeScripts(scripts) {
@@ -228,7 +295,8 @@ async function analyzePage(sendResponse) {
     try {
         const scripts = collectScripts();
         const cookies = collectCookies();
-        const trackers = await collectTrackers(); // Await the asynchronous function
+        const trackers = await collectTrackers();
+        const trackerMappings = monitorNetworkRequests(trackers.map(t => t.domain));
 
         const suspiciousActivity = await analyzeScripts(scripts);
 
@@ -239,6 +307,7 @@ async function analyzePage(sendResponse) {
                 scripts,
                 cookies,
                 trackers,
+                trackerMappings, // Include tracker-to-script mappings
                 suspiciousActivity
             }
         }, () => {
@@ -248,7 +317,6 @@ async function analyzePage(sendResponse) {
             } else {
                 console.log("Page analysis saved.");
                 sendResponse({ success: true, message: "Page analysis complete." });
-                // return true;
             }
         });
     } catch (error) {
@@ -256,3 +324,4 @@ async function analyzePage(sendResponse) {
         sendResponse({ success: false, message: "Page analysis failed due to an error." });
     }
 }
+

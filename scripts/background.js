@@ -5,70 +5,88 @@ let maliciousIndicators = [];
 // Listener to handle messages from content.js and popup.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
-        if (message.type === "maliciousIndicatorsLoaded") {
-            // Synchronize malicious indicators
-            maliciousIndicators = message.data;
-            console.log("Malicious indicators received in background.js:", maliciousIndicators);
-            sendResponse({ success: true });
-
-        } else if (message.type === "fetchScriptContent" && message.url) {
-            // Call fetchScriptContent and send the result back
-            fetchScriptContent(message.url)
-                .then(content => {
-                    if (content) {
-                        sendResponse({ success: true, content });
-                    } else {
-                        sendResponse({ success: false, content: null });
-                    }
-                })
-                .catch(error => {
-                    console.error("Error handling fetchScriptContent request:", error);
-                    sendResponse({ success: false, content: null });
-                });
-            return true; // Keep the message channel open for asynchronous response
-
-        } else if (message.type === 'downloadReport') {
-            // Generate and download the report
-            chrome.storage.local.get('pageAnalysis', result => {
-                if (chrome.runtime.lastError) {
-                    console.error("Error fetching page analysis:", chrome.runtime.lastError.message);
-                    sendResponse({ error: 'Failed to fetch page analysis.' });
-                    return;
-                }
-
-                if (result.pageAnalysis) {
-                    const reportContent = generateDetailedReport(result.pageAnalysis, result.pageAnalysis.url);
-                    const blob = new Blob([reportContent], { type: 'text/html' });
-
-                    // Convert blob to Data URL for downloading
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        chrome.downloads.download({
-                            url: reader.result,
-                            filename: 'Privacy_Analysis_Report.html',
-                            saveAs: true
-                        }, downloadId => {
-                            if (chrome.runtime.lastError) {
-                                console.error("Download error:", chrome.runtime.lastError.message);
-                                sendResponse({ error: 'Failed to download report.' });
-                            } else {
-                                console.log("Report download initiated with ID:", downloadId);
-                                sendResponse({ success: true });
-                            }
-                        });
-                    };
-                    reader.readAsDataURL(blob);
+        switch (message.type) {
+            case "maliciousIndicatorsLoaded":
+                // Synchronize malicious indicators
+                if (Array.isArray(message.data)) {
+                    maliciousIndicators = message.data;
+                    console.log("Malicious indicators received in background.js:", maliciousIndicators);
+                    sendResponse({ success: true });
                 } else {
-                    console.error("No page analysis found in storage.");
-                    sendResponse({ error: 'No page analysis found.' });
+                    console.warn("Invalid malicious indicators data format.");
+                    sendResponse({ success: false, error: "Invalid data format" });
                 }
-            });
+                break;
 
-            return true; // Keep the message channel open for async response
+            case "fetchScriptContent":
+                if (message.url) {
+                    fetchScriptContent(message.url)
+                        .then((content) => {
+                            if (content) {
+                                sendResponse({ success: true, content });
+                            } else {
+                                sendResponse({ success: false, content: null });
+                            }
+                        })
+                        .catch((error) => {
+                            console.error("Error fetching script content:", error);
+                            sendResponse({ success: false, error: error.message });
+                        });
+                    return true; // Keep the message channel open for asynchronous response
+                } else {
+                    console.warn("No URL provided for fetchScriptContent.");
+                    sendResponse({ success: false, error: "No URL provided" });
+                }
+                break;
 
-        } else {
-            console.warn("Unknown message type received:", message.type);
-            sendResponse({ success: false, error: "Unknown message type" });
+            case "downloadReport":
+                chrome.storage.local.get("pageAnalysis", (result) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("Error fetching page analysis:", chrome.runtime.lastError.message);
+                        sendResponse({ error: "Failed to fetch page analysis." });
+                        return;
+                    }
+
+                    const pageAnalysis = result.pageAnalysis;
+                    if (pageAnalysis) {
+                        try {
+                            const reportContent = generateDetailedReport(pageAnalysis, pageAnalysis.url || "Unknown URL");
+                            const blob = new Blob([reportContent], { type: "text/html" });
+                            const reader = new FileReader();
+
+                            reader.onloadend = () => {
+                                chrome.downloads.download(
+                                    {
+                                        url: reader.result,
+                                        filename: "Privacy_Analysis_Report.html",
+                                        saveAs: true,
+                                    },
+                                    (downloadId) => {
+                                        if (chrome.runtime.lastError) {
+                                            console.error("Download error:", chrome.runtime.lastError.message);
+                                            sendResponse({ success: false, error: "Failed to download report." });
+                                        } else {
+                                            console.log("Report download initiated with ID:", downloadId);
+                                            sendResponse({ success: true });
+                                        }
+                                    }
+                                );
+                            };
+                            reader.readAsDataURL(blob);
+                        } catch (error) {
+                            console.error("Error generating or downloading report:", error);
+                            sendResponse({ success: false, error: "Error generating report" });
+                        }
+                    } else {
+                        console.warn("No page analysis found in storage.");
+                        sendResponse({ error: "No page analysis found." });
+                    }
+                });
+                return true; // Keep the message channel open for async response
+
+            default:
+                console.warn("Unknown message type received:", message.type);
+                sendResponse({ success: false, error: "Unknown message type" });
         }
     } catch (error) {
         console.error("Unexpected error in message handling:", error);
@@ -77,15 +95,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Improved function to fetch script content with detailed error handling
-// Define the function to fetch script content from a URL
 async function fetchScriptContent(url) {
     try {
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch script content: ${response.statusText} (Status: ${response.status})`);
         }
-        const text = await response.text();
-        return text;
+        return await response.text();
     } catch (error) {
         console.error("Error in fetchScriptContent function:", error);
         return null; // Return null if an error occurs
@@ -99,26 +115,140 @@ function generateDetailedReport(data, pageURL) {
         <head>
             <title>Privacy Analysis Report</title>
             <style>
-                body { font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }
-                .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-                h1, h2 { color: #333; }
-                h2 { border-bottom: 2px solid #eaeaea; padding-bottom: 5px; margin-bottom: 10px; }
-                .section { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-left: 4px solid #007bff; border-radius: 3px; }
-                .alert { color: red; font-weight: bold; }
-                .none { color: green; font-weight: bold; }
-                .highlight { color: #ff0000; font-weight: bold; }
+                body { 
+                    font-family: Arial, sans-serif; 
+                    background-color: #f4f4f4; 
+                    padding: 20px; 
+                }
+                .container { 
+                    max-width: 800px; 
+                    margin: 0 auto; 
+                    background: white; 
+                    padding: 20px; 
+                    border-radius: 5px; 
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); 
+                }
+                h1, h2, h3 { 
+                    color: #333; 
+                }
+                h2 { 
+                    border-bottom: 2px solid #eaeaea; 
+                    padding-bottom: 5px; 
+                    margin-bottom: 10px; 
+                }
+                .section { 
+                    margin-bottom: 20px; 
+                    padding: 15px; 
+                    background: #f9f9f9; 
+                    border-left: 4px solid #007bff; 
+                    border-radius: 3px; 
+                }
+                                .script-list {
+                    margin-top: 10px;
+                    padding-left: 20px;
+                    list-style: disc;
+                }
+                .script-item {
+                    word-wrap: break-word; /* Break long words for URLs */
+                    overflow-wrap: break-word; /* Modern browsers */
+                    color: #555;
+                    font-size: 14px;
+                }
+                .script-item:hover {
+                    text-decoration: underline;
+                    color: #007bff;
+                }
+                .cookie-list {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 15px;
+                    margin-top: 10px;
+                }
+                .cookie-item {
+                    background: #ffffff;
+                    padding: 10px 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                    transition: transform 0.2s ease-in-out;
+                }
+                .cookie-item:hover {
+                    transform: translateY(-3px);
+                }
+                .cookie-item strong {
+                    color: black;
+                    font-weight: bold;
+                }
+                .cookie-item .alert {
+                    color: red;
+                    font-weight: bold;
+                }
+                .alert { 
+                    color: red; 
+                    font-weight: bold; 
+                }
+                .none { 
+                    color: green; 
+                    font-weight: bold; 
+                }
+                .highlight { 
+                    color: #ff0000; 
+                    font-weight: bold; 
+                }
+                .tracker-list { 
+                    display: grid; 
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+                    gap: 15px; 
+                    margin-top: 10px;
+                }
+                .tracker-item { 
+                    background: #ffffff; 
+                    padding: 10px 15px; 
+                    border: 1px solid #ddd; 
+                    border-radius: 5px; 
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); 
+                    transition: transform 0.2s ease-in-out; 
+                }
+                .tracker-item:hover { 
+                    transform: translateY(-3px); 
+                }
+                .tracker-item strong { 
+                    color: black; 
+                    font-weight: bold; 
+                }
+                .tracker-item a { 
+                    color: #007bff; 
+                    text-decoration: none; 
+                }
+                .tracker-item a:hover { 
+                    text-decoration: underline; 
+                }
             </style>
+
+
         </head>
         <body>
             <div class="container">
                 <h1>Privacy Analysis Report</h1>
                 <h2>Website URL: ${pageURL}</h2>
-                <div class="section"><h2>Scripts Detected</h2>${generateScriptReport(data.scripts)}</div>
-                <div class="section"><h2>Security & Privacy Violations Detected</h2>${generateCategorizedScriptReport(data.scripts)}</div>
-                <div class="section"><h2>Cookies Detected & Security Analysis</h2>${generateCookieReport(data.cookies)}</div>
-                <div class="section"><h2>Trackers Detected</h2>${generateTrackerReport(data.trackers)}</div>
+                <div class="section">
+                    <h2>Scripts Detected</h2>
+                    ${generateScriptReport(data.scripts)}
+                </div>
+                <div class="section">
+                    <h2>Security & Privacy Violations Detected</h2>
+                    ${generateCategorizedScriptReport(data.scripts)}
+                </div>
+                <div class="section">
+                    ${generateCookieReport(data.cookies)}
+                </div>
+                <div class="section">
+                    <h2>Trackers Detected</h2>
+                    ${generateTrackerReport(data.trackers || [])}
+                </div>
             </div>
         </body>
+
         </html>`;
 }
 
@@ -167,27 +297,69 @@ function generateScriptList(scripts) {
 
 function generateCookieReport(cookies) {
     if (!cookies || cookies.length === 0) return "<p>No cookies detected.</p>";
-    return `<ul>${cookies.map(cookie => `
-        <li><strong>Name:</strong> ${cookie.name}<br>
-            <strong>Type:</strong> ${cookie.type}<br>
-            <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
-            <strong>HttpOnly:</strong> ${cookie.httpOnly ? "Yes" : "<span class='alert'>No</span>"}
-        </li>`).join('')}</ul>`;
+    return `
+        <h3>Cookies Detected & Security Analysis</h3>
+        <div class="cookie-list">
+            ${cookies.map(cookie => `
+                <div class="cookie-item">
+                    <strong>Name:</strong> ${cookie.name}<br>
+                    <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
+                    <strong>HttpOnly:</strong> ${cookie.httpOnly ? "Yes" : "<span class='alert'>No</span>"}
+                </div>
+            `).join("")}
+        </div>`;
 }
 
+// function generateTrackerReport(trackers, trackerMappings) {
+//     if (!trackers || trackers.length === 0) return "<p>No trackers detected.</p>";
+
+//     return `
+//         <h3>Detected Trackers</h3>
+//         <p>The following tracker domains were identified on this page:</p>
+//         <div class="tracker-list">
+//             ${trackers
+//                 .map(tracker => {
+//                     const scripts = trackerMappings[tracker.domain] || ["Unknown"];
+//                     return `
+//                         <div class="tracker-item">
+//                             <strong>Domain:</strong> 
+//                             <a href="https://${tracker.domain}" target="_blank" rel="noopener noreferrer">${tracker.domain}</a><br>
+//                             <strong>Added by:</strong> 
+//                             <ul>
+//                                 ${scripts.map(script => `<li>${script}</li>`).join("")}
+//                             </ul>
+//                         </div>
+//                     `;
+//                 })
+//                 .join("")}
+//         </div>`;
+// }
 function generateTrackerReport(trackers) {
     if (!trackers || trackers.length === 0) return "<p>No trackers detected.</p>";
+
     return `
-        <h3>Detected Trackers</h3>
-        <p>The following trackers were identified on this page:</p>
-        <ul>
-            ${trackers.map(tracker => `
-                <li>
-                    <strong>Domain:</strong> <a href="https://${tracker.domain}" target="_blank" rel="noopener noreferrer">${tracker.domain}</a><br>
-                    <strong>Type:</strong> <span class="${tracker.type === 'Advertising' ? 'highlight' : ''}">${tracker.type}</span><br>
-    
-                </li>
-            `).join('')}
-        </ul>`;
+        <div class="tracker-list">
+            ${trackers
+                .map(tracker => `
+                <div class="tracker-item">
+                    <strong>Domain:</strong> 
+                    <a href="https://${tracker.domain || 'Unknown'}" target="_blank" rel="noopener noreferrer">
+                        ${tracker.domain || 'Unknown'}
+                    </a>
+                    ${tracker.scripts && tracker.scripts.length > 0 ? `
+                    <br>
+                    <strong>Related Scripts:</strong>
+                    <ul class="script-list">
+                        ${tracker.scripts.map(script => `<li class="script-item">${script}</li>`).join('')}
+                    </ul>` : `
+                    <p><em>No related scripts found.</em></p>`}
+                </div>`)
+                .join("")}
+        </div>`;
 }
+
+
+
+
+
 
