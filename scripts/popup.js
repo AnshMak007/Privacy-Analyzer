@@ -9,61 +9,62 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    // Initially disable the download button
+    // Disable the download button initially
     downloadButton.disabled = true;
 
+    // Add event listener for analysis button
     analyzeButton.addEventListener("click", () => {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
-                console.log("Sending message to content script to start analysis.");
-
+            if (tabs && tabs[0]) {
+                console.log(`Active tab ID: ${tabs[0].id}, URL: ${tabs[0].url}`);
                 chrome.tabs.sendMessage(
                     tabs[0].id,
                     { type: "analyzePage" },
                     (response) => {
                         if (chrome.runtime.lastError) {
                             console.error("Error:", chrome.runtime.lastError.message);
-                            displayErrorMessage("Failed to start analysis on the current page.");
+                            displayErrorMessage("Failed to start analysis. Ensure content script is active.");
                             return;
                         }
-
+        
                         if (response && response.success) {
                             console.log("Page analysis started successfully.");
-                            downloadButton.disabled = false; // Enable the download button
+                            downloadButton.disabled = false;
                             displaySuccessMessage("Analysis completed successfully. Ready to download report.");
                         } else {
                             console.error("Content script did not respond as expected.", response);
-                            displayErrorMessage("Failed to receive response from content script.");
+                            displayErrorMessage("Failed to analyze the page.");
                         }
                     }
                 );
             } else {
                 console.error("No active tab found.");
-                displayErrorMessage("No active tab found. Please open a page to analyze.");
+                displayErrorMessage("No active tab found. Please open a valid webpage.");
             }
-        });
+        });        
     });
 
+    // Add event listener for download button
     downloadButton.addEventListener("click", () => {
         chrome.runtime.sendMessage({ type: "downloadReport" }, (response) => {
             if (chrome.runtime.lastError) {
-                console.error("Download error:", chrome.runtime.lastError.message);
+                console.error("Error during report download:", chrome.runtime.lastError.message);
                 displayErrorMessage("Failed to generate report.");
-                return; // Ensure we exit if there's an error
+                return;
             }
 
             if (response && response.success) {
                 console.log("Report downloaded successfully.");
                 displaySuccessMessage("Report downloaded successfully.");
             } else {
-                console.error("Report download failed:", response);
-                displayErrorMessage("Report download failed.");
+                console.error("Report generation failed.", response);
+                displayErrorMessage("Failed to generate report. Please try again.");
             }
         });
     });
 });
 
-// Helper functions
+// Function to display success messages
 function displaySuccessMessage(message) {
     const errorMessage = document.getElementById("errorMessage");
     const successMessage = document.getElementById("successMessage");
@@ -75,6 +76,7 @@ function displaySuccessMessage(message) {
     }
 }
 
+// Function to display error messages
 function displayErrorMessage(message) {
     const successMessage = document.getElementById("successMessage");
     const errorMessage = document.getElementById("errorMessage");

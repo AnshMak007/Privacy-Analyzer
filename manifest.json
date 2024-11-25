@@ -13,14 +13,19 @@
     "downloads"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "*://*/*",
+    "*://easylist.to/*",
+    "*://githubusercontent.com/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
   },
   "web_accessible_resources": [
     {
-      "resources": ["scripts/maliciousIndicators.json"],
+      "resources": [
+        "scripts/maliciousIndicators.json",
+        "scripts/trackers.json"  
+      ],
       "matches": ["<all_urls>"]
     }
   ],
