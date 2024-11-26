@@ -108,6 +108,7 @@ async function fetchScriptContent(url) {
     }
 }
 
+
 // Function to generate the HTML report content
 function generateDetailedReport(data, pageURL) {
     return `
@@ -143,20 +144,42 @@ function generateDetailedReport(data, pageURL) {
                     border-left: 4px solid #007bff; 
                     border-radius: 3px; 
                 }
-                                .script-list {
+                .script-list {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Flexible layout */
+                    gap: 15px;
                     margin-top: 10px;
-                    padding-left: 20px;
-                    list-style: disc;
                 }
+                
                 .script-item {
-                    word-wrap: break-word; /* Break long words for URLs */
-                    overflow-wrap: break-word; /* Modern browsers */
-                    color: #555;
+                    background: #ffffff;
+                    padding: 10px 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                    transition: transform 0.2s ease-in-out;
                     font-size: 14px;
                 }
                 .script-item:hover {
-                    text-decoration: underline;
-                    color: #007bff;
+                    transform: translateY(-3px); /* Subtle hover effect */
+                }
+                .script-item strong {
+                    display: block;
+                    font-weight: bold;
+                    color: black;
+                    margin-bottom: 5px;
+                }
+
+                .script-item ul {
+                    margin-top: 5px;
+                    padding-left: 20px;
+                    list-style: disc;
+                }
+
+                .script-item li {
+                    word-wrap: break-word; /* Prevent overflow for long texts */
+                    overflow-wrap: break-word;
+                    color: #555;
                 }
                 .cookie-list {
                     display: grid;
@@ -180,6 +203,15 @@ function generateDetailedReport(data, pageURL) {
                     font-weight: bold;
                 }
                 .cookie-item .alert {
+                    color: red;
+                    font-weight: bold;
+                }
+                .cookie-status.secure {
+                    color: green;
+                    font-weight: bold;
+                }
+
+                .cookie-status.insecure {
                     color: red;
                     font-weight: bold;
                 }
@@ -223,6 +255,7 @@ function generateDetailedReport(data, pageURL) {
                 .tracker-item a:hover { 
                     text-decoration: underline; 
                 }
+
             </style>
 
 
@@ -231,17 +264,25 @@ function generateDetailedReport(data, pageURL) {
             <div class="container">
                 <h1>Privacy Analysis Report</h1>
                 <h2>Website URL: ${pageURL}</h2>
+                
+                <!-- Scripts Detected -->
                 <div class="section">
                     <h2>Scripts Detected</h2>
                     ${generateScriptReport(data.scripts)}
                 </div>
+
+                <!-- Security & Privacy Violations Detected -->
                 <div class="section">
                     <h2>Security & Privacy Violations Detected</h2>
-                    ${generateCategorizedScriptReport(data.scripts)}
+                    ${generateCategorizedScriptReport(data.scripts, data.suspiciousActivity)}
                 </div>
+
+                <!-- Cookies Detected & Security Analysis -->
                 <div class="section">
                     ${generateCookieReport(data.cookies)}
                 </div>
+
+                <!-- Trackers Detected -->
                 <div class="section">
                     <h2>Trackers Detected</h2>
                     ${generateTrackerReport(data.trackers || [])}
@@ -249,48 +290,50 @@ function generateDetailedReport(data, pageURL) {
             </div>
         </body>
 
+
         </html>`;
 }
 
 // Helper functions to generate report sections
 function generateScriptReport(scripts) {
     if (!scripts || scripts.length === 0) return "<p>No scripts detected.</p>";
-    return `<ul>${scripts.map(script => `
-        <li><strong>Source:</strong> ${script.src}<br>
-            <strong>Attributes:</strong><ul>
-                <li>Async: ${script.async}</li>
-                <li>Defer: ${script.defer}</li>
-                <li>CORS: ${script.crossorigin || 'N/A'}</li>
-            </ul>
-        </li>`).join('')}</ul>`;
+    return `
+        <div class="script-list">
+            ${scripts.map(script => `
+                <div class="script-item">
+                    <strong>Source:</strong> ${script.src}<br>
+                    <strong>Attributes:</strong>
+                    <ul>
+                        <li>Async: ${script.async}</li>
+                        <li>Defer: ${script.defer}</li>
+                        <li>CORS: ${script.crossorigin || 'N/A'}</li>
+                    </ul>
+                </div>
+            `).join('')}
+        </div>`;
 }
 
-function generateCategorizedScriptReport(scripts) {
+
+function generateCategorizedScriptReport(scripts, suspiciousActivity) {
     const phishing = [], cookieTheft = [], untrustedCalls = [];
-    const keylogging = [], fakeLogin = [], obfuscatedScripts = [];
+    const keylogging = [], fakeLogin = [];
 
-    scripts.forEach(script => {
-        const src = script.src.toLowerCase();
-        if (maliciousIndicators.some(indicator => src.includes(indicator))) phishing.push(script.src);
-        if (src.includes("cookie")) cookieTheft.push(script.src);
-        if (src.includes("networkcall")) untrustedCalls.push(script.src);
-
-        // Additional behavior detections
-        if (src.includes("keylog") || script.detectedBehavior === "keylogging") keylogging.push(script.src);
-        if (src.includes("login") || script.detectedBehavior === "fakeLoginForm") fakeLogin.push(script.src);
-        if (src.includes("obfuscate") || script.detectedBehavior === "obfuscated") obfuscatedScripts.push(script.src);
-    });
+    // Iterate over suspicious activity and categorize scripts accordingly
+    suspiciousActivity.phishing.forEach(script => phishing.push(script));
+    suspiciousActivity.cookieTheft.forEach(script => cookieTheft.push(script));
+    suspiciousActivity.untrustedCalls.forEach(script => untrustedCalls.push(script));
+    suspiciousActivity.keylogging.forEach(script => keylogging.push(script));
+    suspiciousActivity.fakeLogin.forEach(script => fakeLogin.push(script));
 
     return `
         <h3>Phishing Scripts</h3>${phishing.length ? generateScriptList(phishing) : "<p>No phishing scripts detected.</p>"}
         <h3>Cookie Theft Scripts</h3>${cookieTheft.length ? generateScriptList(cookieTheft) : "<p>No cookie theft scripts detected.</p>"}
         <h3>Untrusted Network Calls</h3>${untrustedCalls.length ? generateScriptList(untrustedCalls) : "<p>No untrusted network calls detected.</p>"}
         <h3>Keylogging Scripts</h3>${keylogging.length ? generateScriptList(keylogging) : "<p>No keylogging behavior detected.</p>"}
-        <h3>Fake Login Form Manipulation Scripts</h3>${fakeLogin.length ? generateScriptList(fakeLogin) : "<p>No fake login form manipulations detected.</p>"}
-        <h3>Obfuscated Scripts</h3>${obfuscatedScripts.length ? generateScriptList(obfuscatedScripts) : "<p>No obfuscated scripts detected.</p>"}`;
+        <h3>Fake Login Form Manipulation Scripts</h3>${fakeLogin.length ? generateScriptList(fakeLogin) : "<p>No fake login form manipulations detected.</p>"}`;
 }
 
-
+// Helper function to create the list of scripts
 function generateScriptList(scripts) {
     return `<ul>${scripts.map(src => `<li>${src}</li>`).join('')}</ul>`;
 }
@@ -304,36 +347,16 @@ function generateCookieReport(cookies) {
                 <div class="cookie-item">
                     <strong>Name:</strong> ${cookie.name}<br>
                     <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
-                    <strong>HttpOnly:</strong> ${cookie.httpOnly ? "Yes" : "<span class='alert'>No</span>"}
+                    <strong>Session:</strong> ${cookie.isSession ? "Yes" : "No"}<br>
+                    <span class="cookie-status ${cookie.secure ? 'secure' : 'insecure'}">
+                        ${cookie.secure ? 'Secure Cookie' : 'Insecure Cookie'}
+                    </span><br>
                 </div>
             `).join("")}
         </div>`;
 }
 
-// function generateTrackerReport(trackers, trackerMappings) {
-//     if (!trackers || trackers.length === 0) return "<p>No trackers detected.</p>";
 
-//     return `
-//         <h3>Detected Trackers</h3>
-//         <p>The following tracker domains were identified on this page:</p>
-//         <div class="tracker-list">
-//             ${trackers
-//                 .map(tracker => {
-//                     const scripts = trackerMappings[tracker.domain] || ["Unknown"];
-//                     return `
-//                         <div class="tracker-item">
-//                             <strong>Domain:</strong> 
-//                             <a href="https://${tracker.domain}" target="_blank" rel="noopener noreferrer">${tracker.domain}</a><br>
-//                             <strong>Added by:</strong> 
-//                             <ul>
-//                                 ${scripts.map(script => `<li>${script}</li>`).join("")}
-//                             </ul>
-//                         </div>
-//                     `;
-//                 })
-//                 .join("")}
-//         </div>`;
-// }
 function generateTrackerReport(trackers) {
     if (!trackers || trackers.length === 0) return "<p>No trackers detected.</p>";
 
