@@ -6,60 +6,146 @@
     <title>Privacy Analyzer</title>
     <style>
         body {
-            width: 300px;
-            padding: 10px;
+            margin: 0;
+            /*padding: 20px;*/
             font-family: Arial, sans-serif;
+            background-color: #3a444efa;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-around;
+            height: 100%;
+            box-sizing: border-box;
+            overflow: hidden; /* Prevent scrolling */
+            min-width: 300px; /* Set minimum width for the popup */
+            max-width: 400px; /* Prevent it from stretching too wide */
         }
+        body {
+            width: auto; /* Adjust this to your desired width */
+            height: auto; /* Allow height to adjust based on content */
+        }
+        
         h3 {
             margin: 0;
             padding: 10px 0;
             text-align: center;
+            color: #00FF9D;
+            font-size: 1.4em;
+            font-weight: bold;
         }
+        
         button {
-            background-color: #4CAF50;
-            color: white;
+            background: linear-gradient(to right, #00C853, #64DD17);
             border: none;
+            color: white;
             padding: 10px;
+            border-radius: 25px;
+            font-size: 1em;
             cursor: pointer;
-            border-radius: 5px;
-            width: 100%;
+            width: 80%; /* Ensure buttons fit within the available space */
             margin: 10px 0;
+            margin-left: 27px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease-in-out;
         }
+        .popup-container {
+            /*padding: 20px;*/
+            border-radius: 5px;
+            /*box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);*/
+            min-width: 300px;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: scale(1.05);
+        }
+        
         button:disabled {
-            background-color: #ccc;
+            background: #444;
             cursor: not-allowed;
-        }
-        button:hover:enabled {
-            background-color: #45a049;
-        }
+            color: #ccc;
+        }        
+        
         #loading {
             display: none;
             text-align: center;
             margin: 10px 0;
             font-weight: bold;
-            color: #4CAF50;
+            color: #00FF9D;
         }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0.7;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        #errorMessage, #successMessage {
+            margin: 10px 0;
+            font-size: 0.9em;
+            text-align: center;
+            display: none;
+        }
+        
         #errorMessage {
             color: red;
-            display: none;
-            margin: 10px 0;
         }
+
         #successMessage {
-            color: green;
-            display: none;
-            margin: 10px 0;
+            color: #00FF9D;
+        }
+
+        #loading {
+            font-weight: bold;
+            color: #00FF9D; /* Matches the title color */
+        }
+
+        /* Styling the buttons to match the dark theme */
+        #analyzeButton {
+            background: linear-gradient(135deg, #00e676, #00c853);
+        }
+
+        #downloadButton {
+            background: linear-gradient(135deg, #1e88e5, #1565c0);
+        }
+
+        #downloadButton:disabled {
+            background: #3a3a4f;
+        }
+
+        /* Additional styling for responsiveness */
+        @media (max-width: 400px) {
+            body {
+                width: 90%;
+                padding: 15px;
+            }
+
+            h3 {
+                font-size: 1.3em;
+            }
+
+            button {
+                padding: 10px;
+                font-size: 0.9em;
+            }
         }
     </style>
 </head>
 <body>
-    <h3>Privacy Analyzer</h3>
-
-    <button id="analyzeButton">Analyze Page</button>
-    <button id="downloadButton" disabled>Download Report</button>
-    <div id="loading">Analyzing...</div>
-    <div id="errorMessage"></div>
-    <div id="successMessage"></div> <!-- Added success message element -->
-
+    <div class="popup-container">
+        <h3>Privacy Analyzer</h3>
+        <button id="analyzeButton">Analyze Page</button>
+        <button id="downloadButton" disabled>Download Report</button>
+        <div id="loading">Analyzing...</div>
+        <div id="errorMessage">An error occurred while analyzing the page.</div>
+        <div id="successMessage">Analysis completed successfully!</div>
+    
     <script src="scripts/popup.js"></script>
+    </div>
 </body>
 </html>
