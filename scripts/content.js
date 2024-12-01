@@ -149,23 +149,15 @@ async function collectTrackers() {
 
     scripts.forEach(script => {
         if (script.src) {
-            const cleanSrc = new URL(script.src).hostname; // Extract hostname
+            const cleanSrc = new URL(script.src).hostname;
             trackerPatterns.forEach(tracker => {
-                const pattern = new RegExp(tracker.domain, "i");
-                if (pattern.test(cleanSrc)) {
-                    // Find existing tracker or add a new one
-                    let existingTracker = detectedTrackers.find(t => t.domain === tracker.domain);
-
-                    if (!existingTracker) {
-                        existingTracker = {
-                            domain: tracker.domain,
-                            scripts: [],
-                        };
-                        detectedTrackers.push(existingTracker);
+                if (tracker.domain && cleanSrc.includes(tracker.domain)) {
+                    let trackerEntry = detectedTrackers.find(t => t.domain === tracker.domain);
+                    if (!trackerEntry) {
+                        trackerEntry = { domain: tracker.domain, scripts: [] };
+                        detectedTrackers.push(trackerEntry);
                     }
-
-                    // Add the script to the tracker
-                    existingTracker.scripts.push(script.src || "Inline script");
+                    trackerEntry.scripts.push(script.src);
                 }
             });
         }
@@ -176,7 +168,7 @@ async function collectTrackers() {
 
 
 async function checkPhishingDomain(domain) {
-    const apiKey = 'AIzaSyDiqvY0hQeBk0dbfA3EKAQmimrbovet4iA';  // Replace with your actual API key
+    const apiKey = 'AIzaSyCKN36NdLprKcx5puR6nYiH2AWj6Fm9lk4';  // Replace with your actual API key
     const url = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`;
 
     const requestPayload = {
@@ -231,10 +223,10 @@ async function analyzeScripts(scripts) {
         const src = script.src ? script.src.toLowerCase() : "Inline script";
         let content = script.content || null;
 
-        // Fetch external script content via background.js to bypass CORS
+        // Fetch external script content via background.js
         if (script.src && !content) {
             try {
-                const response = await new Promise((resolve) => {
+                const response = await new Promise(resolve => {
                     chrome.runtime.sendMessage(
                         { type: "fetchScriptContent", url: script.src },
                         resolve
@@ -245,12 +237,21 @@ async function analyzeScripts(scripts) {
                     content = response.content;
                 } else {
                     console.warn(`Failed to fetch external script content: ${script.src}`);
-                    content = "// Unable to fetch script content due to restrictions";
                 }
             } catch (error) {
                 console.error("Error fetching script content:", error);
-                continue; // Skip further analysis for this script
+                continue; // Skip further analysis
             }
+        }
+
+        // Check against maliciousIndicators
+        const matchesMaliciousIndicator = maliciousIndicators.some(indicator => src.includes(indicator));
+        if (matchesMaliciousIndicator) {
+            phishing.push(src);
+            behavioralIndicators.push({
+                type: "malicious_indicator",
+                description: `Script matches malicious indicator: ${src}`
+            });
         }
 
         // Analyze behavior patterns in the script content
@@ -275,23 +276,51 @@ async function analyzeScripts(scripts) {
                 }
             }
 
-            // Untrusted network calls: Track method and URL
-            if (/fetch\(['"]http/i.test(content) || /new\sXMLHttpRequest\(\)/i.test(content)) {
-                const matches = content.match(/fetch\(['"](.*?)['"]/) || content.match(/new\sXMLHttpRequest\(\)\s*;\s*http(.*?)\)/);
-                if (matches && matches[1]) {
-                    const url = matches[1];
-                    untrustedCalls.push({
-                        src,
-                        url,
-                        method: matches[0].includes("POST") ? "POST" : "GET"
+            // Improved Untrusted Network Call Detection
+            if (/fetch\(/i.test(content) || /new\sXMLHttpRequest\(/i.test(content)) {
+                // Detect fetch() calls
+                const fetchMatches = content.match(/fetch\(['"]([^'"]+)['"](,?\s*{[^}]*})?/g);
+                if (fetchMatches) {
+                    fetchMatches.forEach(match => {
+                        const urlMatch = match.match(/fetch\(['"]([^'"]+)['"]/);
+                        const optionsMatch = match.match(/,\s*{[^}]*"method"\s*:\s*"([^"]+)"/i); // Extract method
+                        if (urlMatch) {
+                            const url = urlMatch[1];
+                            untrustedCalls.push({
+                                src,
+                                url,
+                                method: optionsMatch ? optionsMatch[1] : "GET", // Default to GET if no method specified
+                            });
+                            behavioralIndicators.push({
+                                type: "untrusted_network_call",
+                                description: `Untrusted network call detected in: ${src} (URL: ${url}, Method: ${optionsMatch ? optionsMatch[1] : "GET"})`
+                            });
+                        }
                     });
-                    behavioralIndicators.push({
-                        type: "untrusted_network_call",
-                        description: `Untrusted network call detected in: ${src} (URL: ${url})`
+                }
+
+                // Detect XMLHttpRequest calls
+                const xhrMatches = content.match(/new\sXMLHttpRequest\(\).*?\.open\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/gi);
+                if (xhrMatches) {
+                    xhrMatches.forEach(match => {
+                        const methodMatch = match.match(/\.open\(\s*['"]([^'"]+)['"]/); // Extract method
+                        const urlMatch = match.match(/\.open\([^,]+,\s*['"]([^'"]+)['"]/); // Extract URL
+                        if (methodMatch && urlMatch) {
+                            const method = methodMatch[1];
+                            const url = urlMatch[1];
+                            untrustedCalls.push({
+                                src,
+                                url,
+                                method,
+                            });
+                            behavioralIndicators.push({
+                                type: "untrusted_network_call",
+                                description: `Untrusted network call detected in: ${src} (URL: ${url}, Method: ${method})`
+                            });
+                        }
                     });
                 }
             }
-
             // Keylogging detection: Advanced detection
             if (/addEventListener\(['"](keypress|keydown|keyup)['"],/i.test(content) ||
                 /window\.onkeypress/i.test(content) ||

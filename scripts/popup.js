@@ -3,17 +3,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const downloadButton = document.getElementById("downloadButton");
     const errorMessage = document.getElementById("errorMessage");
     const successMessage = document.getElementById("successMessage");
+    const loadingMessage = document.getElementById("loading");
 
-    if (!analyzeButton || !downloadButton || !errorMessage || !successMessage) {
+    if (!analyzeButton || !downloadButton || !errorMessage || !successMessage || !loadingMessage) {
         console.error("One or more elements are missing in the DOM.");
         return;
     }
 
-    // Initially disable the download button
+    // Initially disable the download button and hide messages
     downloadButton.disabled = true;
+    hideMessages();
 
     // Add event listener for the Analyze button
     analyzeButton.addEventListener("click", () => {
+        hideMessages(); // Clear existing messages
+        displayLoadingMessage("Analyzing the webpage...");
+
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (tabs && tabs[0]) {
                 console.log(`Sending analyzePage message to tab ID: ${tabs[0].id}`);
@@ -21,6 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     tabs[0].id,
                     { type: "analyzePage" },
                     (response) => {
+                        hideLoadingMessage();
+
                         if (chrome.runtime.lastError) {
                             console.error("Error:", chrome.runtime.lastError.message);
                             displayErrorMessage("Failed to start analysis. Ensure the content script is active.");
@@ -30,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (response && response.success) {
                             console.log("Page analysis completed successfully.");
                             downloadButton.disabled = false;
-                            displaySuccessMessage("Analysis completed successfully. Ready to download report.");
+                            displaySuccessMessage("Analysis completed successfully. Ready to download the report.");
                         } else {
                             console.error("Unexpected response from content script:", response);
                             displayErrorMessage("Page analysis failed. Please try again.");
@@ -40,13 +47,19 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 console.error("No active tab found.");
                 displayErrorMessage("No active tab found. Please open a valid webpage.");
+                hideLoadingMessage();
             }
         });
     });
 
     // Add event listener for the Download Report button
     downloadButton.addEventListener("click", () => {
+        hideMessages(); // Clear existing messages
+        displayLoadingMessage("Generating the report...");
+
         chrome.runtime.sendMessage({ type: "downloadReport" }, (response) => {
+            hideLoadingMessage();
+
             if (chrome.runtime.lastError) {
                 console.error("Error during report download:", chrome.runtime.lastError.message);
                 displayErrorMessage("Failed to generate the report.");
@@ -66,11 +79,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Function to display success messages
 function displaySuccessMessage(message) {
-    const errorMessage = document.getElementById("errorMessage");
+    hideMessages(); // Clear other messages
     const successMessage = document.getElementById("successMessage");
-
-    if (errorMessage && successMessage) {
-        errorMessage.style.display = "none";
+    if (successMessage) {
         successMessage.innerText = message;
         successMessage.style.display = "block";
     }
@@ -78,12 +89,38 @@ function displaySuccessMessage(message) {
 
 // Function to display error messages
 function displayErrorMessage(message) {
-    const successMessage = document.getElementById("successMessage");
+    hideMessages(); // Clear other messages
     const errorMessage = document.getElementById("errorMessage");
-
-    if (successMessage && errorMessage) {
-        successMessage.style.display = "none";
+    if (errorMessage) {
         errorMessage.innerText = message;
         errorMessage.style.display = "block";
     }
+}
+
+// Function to display loading message
+function displayLoadingMessage(message) {
+    const loadingMessage = document.getElementById("loading");
+    if (loadingMessage) {
+        loadingMessage.innerText = message;
+        loadingMessage.style.display = "block";
+    }
+}
+
+// Function to hide loading message
+function hideLoadingMessage() {
+    const loadingMessage = document.getElementById("loading");
+    if (loadingMessage) {
+        loadingMessage.style.display = "none";
+    }
+}
+
+// Function to hide all messages
+function hideMessages() {
+    const errorMessage = document.getElementById("errorMessage");
+    const successMessage = document.getElementById("successMessage");
+    const loadingMessage = document.getElementById("loading");
+
+    if (errorMessage) errorMessage.style.display = "none";
+    if (successMessage) successMessage.style.display = "none";
+    if (loadingMessage) loadingMessage.style.display = "none";
 }

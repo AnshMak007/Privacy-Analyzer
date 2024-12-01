@@ -328,7 +328,7 @@ function generateCategorizedScriptReport(scripts, suspiciousActivity) {
     return `
         <h3>Phishing Scripts</h3>${phishing.length ? generateScriptList(phishing) : "<p>No phishing scripts detected.</p>"}
         <h3>Cookie Theft Scripts</h3>${cookieTheft.length ? generateScriptList(cookieTheft) : "<p>No cookie theft scripts detected.</p>"}
-        <h3>Untrusted Network Calls</h3>${untrustedCalls.length ? generateScriptList(untrustedCalls) : "<p>No untrusted network calls detected.</p>"}
+        <h3>Untrusted Network Calls</h3>${untrustedCalls.length ? generateScriptLists(untrustedCalls) : "<p>No untrusted network calls detected.</p>"}
         <h3>Keylogging Scripts</h3>${keylogging.length ? generateScriptList(keylogging) : "<p>No keylogging behavior detected.</p>"}
         <h3>Fake Login Form Manipulation Scripts</h3>${fakeLogin.length ? generateScriptList(fakeLogin) : "<p>No fake login form manipulations detected.</p>"}`;
 }
@@ -337,6 +337,10 @@ function generateCategorizedScriptReport(scripts, suspiciousActivity) {
 function generateScriptList(scripts) {
     return `<ul>${scripts.map(src => `<li>${src}</li>`).join('')}</ul>`;
 }
+function generateScriptLists(scripts) {
+    return `<ul>${scripts.map(script => `<li>${script.src || 'Inline script'}</li>`).join('')}</ul>`;
+}
+
 
 function generateCookieReport(cookies) {
     if (!cookies || cookies.length === 0) return "<p>No cookies detected.</p>";
