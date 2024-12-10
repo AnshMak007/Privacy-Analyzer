@@ -387,4 +387,3 @@ async function analyzePage(sendResponse) {
         sendResponse({ success: false, message: "Page analysis failed due to an error." });
     }
 }
-

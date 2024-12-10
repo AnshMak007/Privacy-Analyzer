@@ -43,7 +43,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 chrome.storage.local.get("pageAnalysis", (result) => {
                     if (chrome.runtime.lastError) {
                         console.error("Error fetching page analysis:", chrome.runtime.lastError.message);
-                        sendResponse({ error: "Failed to fetch page analysis." });
+                        sendResponse({ success: false, error: "Failed to fetch page analysis." });
                         return;
                     }
 
@@ -92,16 +92,52 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.error("Unexpected error in message handling:", error);
         sendResponse({ success: false, error: "Unexpected error in background script" });
     }
+
+    // if (message.action === "getThirdPartyCookies") {
+    //     chrome.cookies.getAll({}, allCookies => {
+    //         const thirdPartyCookies = allCookies
+    //             .filter(cookie => !cookie.domain.includes(sender.tab.url)) // Cookies not belonging to the current domain
+    //             .map(cookie => ({
+    //                 name: cookie.name,
+    //                 value: cookie.value,
+    //                 secure: cookie.secure,
+    //                 isSession: !cookie.expirationDate, // No expiration date implies a session cookie
+    //                 thirdParty: true,
+    //                 domain: cookie.domain,
+    //             }));
+
+    //         // Log third-party cookies before sending
+    //         console.log("Third-party cookies (background.js):", thirdPartyCookies);
+
+    //         // Ensure it's an array before sending
+    //         if (!Array.isArray(thirdPartyCookies)) {
+    //             console.warn("Expected an array but got:", thirdPartyCookies);
+    //             thirdPartyCookies = []; // Default to an empty array if not an array
+    //         }
+
+    //         sendResponse(thirdPartyCookies); // Send the response back
+    //     });
+
+    //     // Return true to keep the message channel open for asynchronous response
+    //     return true;
+    // } else {
+    //     sendResponse({ success: false, error: 'Unknown message type' });
+    // }      
+    
 });
 
 // Improved function to fetch script content with detailed error handling
 async function fetchScriptContent(url) {
+    console.log("Fetching script content from:", url); // Log the URL being fetched
+
     try {
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`Failed to fetch script content: ${response.statusText} (Status: ${response.status})`);
         }
-        return await response.text();
+        const scriptContent = await response.text();
+        console.log("Script content fetched successfully.");
+        return scriptContent;
     } catch (error) {
         console.error("Error in fetchScriptContent function:", error);
         return null; // Return null if an error occurs
@@ -137,75 +173,136 @@ function generateDetailedReport(data, pageURL) {
                     padding-bottom: 5px; 
                     margin-bottom: 10px; 
                 }
-                .section { 
-                    margin-bottom: 20px; 
-                    padding: 15px; 
-                    background: #f9f9f9; 
-                    border-left: 4px solid #007bff; 
-                    border-radius: 3px; 
+                h3 {
+                    color: #333;
+                    margin-top: 20px;
+                    font-size: 18px;
                 }
-                .script-list {
+
+                /* Section styles */
+                .section, .suspicious-section {
+                    margin-bottom: 20px;
+                    padding: 15px;
+                    background: #f9f9f9;
+                    border-left: 4px solid #007bff;
+                    border-radius: 3px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                    transition: box-shadow 0.3s ease, transform 0.3s ease;
+                }
+
+                .section:hover, .suspicious-section:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+
+                /* Grid layout for items */
+                .script-list, .cookie-list, .tracker-list {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Flexible layout */
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
                     gap: 15px;
                     margin-top: 10px;
                 }
-                
-                .script-item {
-                    background: #ffffff;
-                    padding: 10px 15px;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-                    transition: transform 0.2s ease-in-out;
-                    font-size: 14px;
-                }
-                .script-item:hover {
-                    transform: translateY(-3px); /* Subtle hover effect */
-                }
-                .script-item strong {
-                    display: block;
-                    font-weight: bold;
-                    color: black;
-                    margin-bottom: 5px;
+
+                /* Item styles with box structure */
+                .script-item, .cookie-item, .tracker-item {
+                    background: #ffffff; /* White background for box */
+                    padding: 10px 15px; /* Add inner spacing */
+                    border: 1px solid #ddd; /* Light border for box structure */
+                    border-radius: 5px; /* Rounded corners for a clean look */
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+                    transition: transform 0.2s ease-in-out, box-shadow 0.3s ease;
+                    word-wrap: break-word; /* Wrap long words */
+                    overflow-wrap: break-word; /* Handle unbreakable long words */
+                    word-break: break-word; /* Break overly long links */
+                    max-width: 100%; /* Ensure content stays within container */
                 }
 
-                .script-item ul {
+                /* Hover effect for boxes */
+                .script-item:hover, .cookie-item:hover, .tracker-item:hover {
+                    transform: translateY(-5px); /* Slight lift effect */
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2); /* Enhanced shadow */
+                }
+
+                /* Styling for text and links inside boxes */
+                .script-item strong, .cookie-item strong, .tracker-item strong {
+                    color: black;
+                    font-weight: bold;
+                }
+
+                .script-item ul, .cookie-item ul, .tracker-item ul {
                     margin-top: 5px;
                     padding-left: 20px;
                     list-style: disc;
                 }
 
-                .script-item li {
-                    word-wrap: break-word; /* Prevent overflow for long texts */
-                    overflow-wrap: break-word;
+                .script-item li, .cookie-item li, .tracker-item li {
                     color: #555;
                 }
-                .cookie-list {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                    gap: 15px;
-                    margin-top: 10px;
+
+                /* Links inside the items */
+                .script-item a, .cookie-item a, .tracker-item a {
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                    text-decoration: none;
+                    color: #007bff; /* Link color */
                 }
+
+                .script-item a:hover, .cookie-item a:hover, .tracker-item a:hover {
+                    text-decoration: underline; /* Highlight links on hover */
+                }
+                .cookie-report {
+                    font-family: Arial, sans-serif;
+                    margin: 20px 0;
+                }
+
+                .cookie-list {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                }
+
                 .cookie-item {
-                    background: #ffffff;
-                    padding: 10px 15px;
+                    background: #f9f9f9;
                     border: 1px solid #ddd;
+                    padding: 10px;
                     border-radius: 5px;
                     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-                    transition: transform 0.2s ease-in-out;
+                    flex: 1 1 calc(45% - 10px);
+                    max-width: calc(45% - 10px);
                 }
-                .cookie-item:hover {
-                    transform: translateY(-3px);
-                }
+
                 .cookie-item strong {
-                    color: black;
-                    font-weight: bold;
+                    color: #333;
                 }
-                .cookie-item .alert {
-                    color: red;
+
+                .cookie-status {
                     font-weight: bold;
+                    color: #fff;
+                    padding: 2px 5px;
+                    border-radius: 3px;
+                    display: inline-block;
                 }
+
+                .cookie-status.secure {
+                    background: #28a745;
+                }
+
+                .cookie-status.insecure {
+                    background: #dc3545;
+                }
+
+                h4 {
+                    margin-bottom: 10px;
+                    color: #007bff;
+                }
+
+
+                /* Alert styles */
+                .alert { 
+                    color: red; 
+                    font-weight: bold; 
+                }
+
                 .cookie-status.secure {
                     color: green;
                     font-weight: bold;
@@ -215,50 +312,19 @@ function generateDetailedReport(data, pageURL) {
                     color: red;
                     font-weight: bold;
                 }
-                .alert { 
-                    color: red; 
-                    font-weight: bold; 
-                }
+
                 .none { 
                     color: green; 
                     font-weight: bold; 
                 }
+
                 .highlight { 
                     color: #ff0000; 
                     font-weight: bold; 
                 }
-                .tracker-list { 
-                    display: grid; 
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-                    gap: 15px; 
-                    margin-top: 10px;
-                }
-                .tracker-item { 
-                    background: #ffffff; 
-                    padding: 10px 15px; 
-                    border: 1px solid #ddd; 
-                    border-radius: 5px; 
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); 
-                    transition: transform 0.2s ease-in-out; 
-                }
-                .tracker-item:hover { 
-                    transform: translateY(-3px); 
-                }
-                .tracker-item strong { 
-                    color: black; 
-                    font-weight: bold; 
-                }
-                .tracker-item a { 
-                    color: #007bff; 
-                    text-decoration: none; 
-                }
-                .tracker-item a:hover { 
-                    text-decoration: underline; 
-                }
+
 
             </style>
-
-
         </head>
         <body>
             <div class="container">
@@ -279,6 +345,7 @@ function generateDetailedReport(data, pageURL) {
 
                 <!-- Cookies Detected & Security Analysis -->
                 <div class="section">
+                    <h2>Cookies Detected</h2>
                     ${generateCookieReport(data.cookies)}
                 </div>
 
@@ -289,8 +356,6 @@ function generateDetailedReport(data, pageURL) {
                 </div>
             </div>
         </body>
-
-
         </html>`;
 }
 
@@ -313,7 +378,6 @@ function generateScriptReport(scripts) {
         </div>`;
 }
 
-
 function generateCategorizedScriptReport(scripts, suspiciousActivity) {
     const phishing = [], cookieTheft = [], untrustedCalls = [];
     const keylogging = [], fakeLogin = [];
@@ -326,39 +390,70 @@ function generateCategorizedScriptReport(scripts, suspiciousActivity) {
     suspiciousActivity.fakeLogin.forEach(script => fakeLogin.push(script));
 
     return `
-        <h3>Phishing Scripts</h3>${phishing.length ? generateScriptList(phishing) : "<p>No phishing scripts detected.</p>"}
-        <h3>Cookie Theft Scripts</h3>${cookieTheft.length ? generateScriptList(cookieTheft) : "<p>No cookie theft scripts detected.</p>"}
-        <h3>Untrusted Network Calls</h3>${untrustedCalls.length ? generateScriptLists(untrustedCalls) : "<p>No untrusted network calls detected.</p>"}
-        <h3>Keylogging Scripts</h3>${keylogging.length ? generateScriptList(keylogging) : "<p>No keylogging behavior detected.</p>"}
-        <h3>Fake Login Form Manipulation Scripts</h3>${fakeLogin.length ? generateScriptList(fakeLogin) : "<p>No fake login form manipulations detected.</p>"}`;
+        <div class="suspicious-section">
+            <h3>Phishing Scripts</h3>
+            <div class="suspicious-content">${phishing.length ? generateScriptList(phishing) : "<p>No phishing scripts detected.</p>"}</div>
+        </div>
+        <div class="suspicious-section">
+            <h3>Cookie Accessing Scripts</h3>
+            <div class="suspicious-content">${cookieTheft.length ? generateScriptList(cookieTheft) : "<p>No cookie theft scripts detected.</p>"}</div>
+        </div>
+        <div class="suspicious-section">
+            <h3>Untrusted Network Calls</h3>
+            <div class="suspicious-content">${untrustedCalls.length ? generateScriptLists(untrustedCalls) : "<p>No untrusted network calls detected.</p>"}</div>
+        </div>
+        <div class="suspicious-section">
+            <h3>Keylogging Scripts</h3>
+            <div class="suspicious-content">${keylogging.length ? generateScriptList(keylogging) : "<p>No keylogging behavior detected.</p>"}</div>
+        </div>`;
 }
 
 // Helper function to create the list of scripts
 function generateScriptList(scripts) {
     return `<ul>${scripts.map(src => `<li>${src}</li>`).join('')}</ul>`;
 }
+
 function generateScriptLists(scripts) {
     return `<ul>${scripts.map(script => `<li>${script.src || 'Inline script'}</li>`).join('')}</ul>`;
 }
 
-
 function generateCookieReport(cookies) {
     if (!cookies || cookies.length === 0) return "<p>No cookies detected.</p>";
-    return `
-        <h3>Cookies Detected & Security Analysis</h3>
+
+    // Separate first-party and third-party cookies
+    const firstPartyCookies = cookies.filter(cookie => !cookie.thirdParty);
+    const thirdPartyCookies = cookies.filter(cookie => cookie.thirdParty);
+
+    // Generate individual cookie items
+    const renderCookieItem = (cookie) => `
+        <div class="cookie-item">
+            <strong>Name:</strong> ${cookie.name || "N/A"}<br>
+            <strong>Value:</strong> ${cookie.value || "N/A"}<br>
+            <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
+            <strong>Session:</strong> ${cookie.isSession ? "Yes" : "No"}<br>
+            <strong>Domain:</strong> ${cookie.domain || "N/A"}<br>
+            <span class="cookie-status ${cookie.secure ? 'secure' : 'insecure'}">
+                ${cookie.secure ? 'Secure Cookie' : 'Insecure Cookie'}
+            </span><br>
+            <strong>Third-Party:</strong> ${cookie.thirdParty ? "Yes" : "No"}<br>
+        </div>`;
+
+    // Generate sections for each type of cookie
+    const cookieSection = (title, cookieList) => `
+        <h4>${title}</h4>
         <div class="cookie-list">
-            ${cookies.map(cookie => `
-                <div class="cookie-item">
-                    <strong>Name:</strong> ${cookie.name}<br>
-                    <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
-                    <strong>Session:</strong> ${cookie.isSession ? "Yes" : "No"}<br>
-                    <span class="cookie-status ${cookie.secure ? 'secure' : 'insecure'}">
-                        ${cookie.secure ? 'Secure Cookie' : 'Insecure Cookie'}
-                    </span><br>
-                </div>
-            `).join("")}
+            ${cookieList.map(renderCookieItem).join("")}
+        </div>`;
+
+    // Generate the full report
+    return `
+        <div class="cookie-report">
+            ${firstPartyCookies.length > 0 ? cookieSection("First-Party Cookies", firstPartyCookies) : "<p>No first-party cookies detected.</p>"}
+            ${thirdPartyCookies.length > 0 ? cookieSection("Third-Party Cookies", thirdPartyCookies) : "<p>No third-party cookies detected.</p>"}
         </div>`;
 }
+
+
 
 
 function generateTrackerReport(trackers) {
@@ -384,9 +479,4 @@ function generateTrackerReport(trackers) {
                 .join("")}
         </div>`;
 }
-
-
-
-
-
 
