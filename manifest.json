@@ -15,7 +15,9 @@
   "host_permissions": [
     "*://*/*",
     "*://easylist.to/*",
-    "*://githubusercontent.com/*"
+    "*://githubusercontent.com/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "scripts/background.js"
