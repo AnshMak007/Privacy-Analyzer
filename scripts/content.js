@@ -45,44 +45,88 @@ function collectScripts() {
     }));
 }
 
+// function collectCookies() {
+//     return new Promise((resolve, reject) => {
+//         console.log("Requesting cookies for URL:", window.location.href); // Log the URL
+
+//         chrome.runtime.sendMessage({ type: 'getCookies', url: window.location.href }, (cookies) => {
+//             // Log the cookies received, or if the callback was called with no cookies
+//             console.log("Cookies received in content script:", cookies);
+
+//             // Handle errors from the runtime
+//             if (chrome.runtime.lastError) {
+//                 console.error("Error fetching cookies:", chrome.runtime.lastError.message);
+//                 reject(new Error("Failed to fetch cookies: " + chrome.runtime.lastError.message));
+//                 return;
+//             }
+
+//             // Check if cookies are valid and log their type
+//             if (!cookies) {
+//                 console.warn("No cookies received. Cookies might be undefined or null.");
+//                 resolve([]);
+//                 return;
+//             }
+
+//             console.log("Type of cookies received:", typeof cookies);
+//             if (typeof cookies === "object" && !Array.isArray(cookies)) {
+//                 console.log("Inspecting object keys:", Object.keys(cookies));
+//             }
+
+//             // Check if cookies is an array and process them
+//             if (Array.isArray(cookies) && cookies.length > 0) {
+//                 const cookieDetails = cookies.map(cookie => ({
+//                     name: cookie.name,
+//                     value: cookie.value,
+//                     secure: cookie.secure,
+//                     httpOnly: cookie.httpOnly,
+//                     session: !cookie.expirationDate,
+//                     domain: cookie.domain,
+//                     thirdParty: cookie.thirdParty
+//                 }));
+
+//                 console.log("Processed cookie details:", cookieDetails); // Log processed cookies
+//                 resolve(cookieDetails);
+//             } else {
+//                 console.warn("No cookies collected or cookies are not in the expected format.");
+//                 resolve([]); // Return an empty array if no cookies or incorrect format
+//             }
+//         });
+//     });
+// }
 function collectCookies() {
     return new Promise((resolve, reject) => {
         console.log("Requesting cookies for URL:", window.location.href); // Log the URL
 
         chrome.runtime.sendMessage({ type: 'getCookies', url: window.location.href }, (cookies) => {
-            // Log the cookies received, or if the callback was called with no cookies
             console.log("Cookies received in content script:", cookies);
 
-            // Handle errors from the runtime
             if (chrome.runtime.lastError) {
                 console.error("Error fetching cookies:", chrome.runtime.lastError.message);
                 reject(new Error("Failed to fetch cookies: " + chrome.runtime.lastError.message));
                 return;
             }
 
-            // Check if cookies are valid and log their type
             if (!cookies) {
                 console.warn("No cookies received. Cookies might be undefined or null.");
                 resolve([]);
                 return;
             }
 
-            console.log("Type of cookies received:", typeof cookies);
-            if (typeof cookies === "object" && !Array.isArray(cookies)) {
-                console.log("Inspecting object keys:", Object.keys(cookies));
-            }
-
-            // Check if cookies is an array and process them
             if (Array.isArray(cookies) && cookies.length > 0) {
-                const cookieDetails = cookies.map(cookie => ({
-                    name: cookie.name,
-                    value: cookie.value,
-                    secure: cookie.secure,
-                    httpOnly: cookie.httpOnly,
-                    session: !cookie.expirationDate,
-                    domain: cookie.domain,
-                    thirdParty: cookie.thirdParty
-                }));
+                const pageDomain = window.location.hostname; // Current page domain
+                const cookieDetails = cookies.map(cookie => {
+                    const isThirdParty = cookie.domain !== pageDomain && !cookie.domain.includes(pageDomain);
+                    return {
+                        name: cookie.name,
+                        value: cookie.value,
+                        secure: cookie.secure,
+                        httpOnly: cookie.httpOnly,
+                        session: !cookie.expirationDate,
+                        domain: cookie.domain,
+                        path: cookie.path,
+                        thirdParty: isThirdParty, // Determine if the cookie is third-party
+                    };
+                });
 
                 console.log("Processed cookie details:", cookieDetails); // Log processed cookies
                 resolve(cookieDetails);

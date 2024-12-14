@@ -134,7 +134,7 @@ async function fetchScriptContent(url) {
         console.log("Script content fetched successfully.");
         return scriptContent;
     } catch (error) {
-        console.error("Error in fetchScriptContent:", error);
+        //console.error("Error in fetchScriptContent:", error);
         return null;
     }
 }
@@ -423,6 +423,7 @@ function generateCookieReport(cookies) {
             <span class="cookie-status ${cookie.secure ? 'secure' : 'insecure'}">
                 ${cookie.secure ? 'Secure Cookie' : 'Insecure Cookie'}
             </span><br>
+            <strong>Third-Party:</strong> ${cookie.thirdParty ? "Yes" : "No"}<br>
         </div>`;
 
     // Generate sections for each type of cookie
@@ -436,7 +437,7 @@ function generateCookieReport(cookies) {
     return `
         <div class="cookie-report">
             ${firstPartyCookies.length > 0 ? cookieSection("First-Party Cookies", firstPartyCookies) : "<p>No first-party cookies detected.</p>"}
-            ${thirdPartyCookies.length > 0 ? cookieSection("Third-Party Cookies", thirdPartyCookies) : ""}
+            ${thirdPartyCookies.length > 0 ? cookieSection("Third-Party Cookies", thirdPartyCookies) : "<p>No third-party cookies detected.</p>"}
         </div>`;
 }
 
