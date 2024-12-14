@@ -6,15 +6,43 @@ let maliciousIndicators = [];
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
         switch (message.type) {
+            case "getCookies":
+                chrome.cookies.getAll({ url: message.url }, (cookies) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("Error fetching cookies:", chrome.runtime.lastError.message);
+                        sendResponse({ success: false, error: "Failed to fetch cookies." });
+                        return;
+                    }
+                    console.log("Cookies fetched in background script:", cookies); // Should log an array
+                    sendResponse(cookies); // Send the array directly
+                });
+                return true;
+
+            case "cookiesCollected":
+                if (Array.isArray(message.cookies)) {
+                    chrome.storage.local.set({ cookies: message.cookies }, () => {
+                        if (chrome.runtime.lastError) {
+                            console.error("Error saving cookies:", chrome.runtime.lastError.message);
+                            sendResponse({ success: false, error: "Failed to save cookies." });
+                        } else {
+                            console.log("Cookies saved successfully.");
+                            sendResponse({ success: true });
+                        }
+                    });
+                } else {
+                    console.error("Invalid cookies format.");
+                    sendResponse({ success: false, error: "Invalid cookies format." });
+                }
+                return true;
+
             case "maliciousIndicatorsLoaded":
-                // Synchronize malicious indicators
                 if (Array.isArray(message.data)) {
                     maliciousIndicators = message.data;
-                    console.log("Malicious indicators received in background.js:", maliciousIndicators);
+                    console.log("Malicious indicators loaded:", maliciousIndicators);
                     sendResponse({ success: true });
                 } else {
-                    console.warn("Invalid malicious indicators data format.");
-                    sendResponse({ success: false, error: "Invalid data format" });
+                    console.error("Invalid malicious indicators format.");
+                    sendResponse({ success: false, error: "Invalid format." });
                 }
                 break;
 
@@ -25,21 +53,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             if (content) {
                                 sendResponse({ success: true, content });
                             } else {
-                                sendResponse({ success: false, content: null });
+                                sendResponse({ success: false, error: "Failed to fetch script content." });
                             }
                         })
                         .catch((error) => {
                             console.error("Error fetching script content:", error);
                             sendResponse({ success: false, error: error.message });
                         });
-                    return true; // Keep the message channel open for asynchronous response
+                    return true;
                 } else {
-                    console.warn("No URL provided for fetchScriptContent.");
-                    sendResponse({ success: false, error: "No URL provided" });
+                    console.error("No URL provided for fetchScriptContent.");
+                    sendResponse({ success: false, error: "No URL provided." });
                 }
                 break;
 
-            case "downloadReport":
+            case "generateReport":
                 chrome.storage.local.get("pageAnalysis", (result) => {
                     if (chrome.runtime.lastError) {
                         console.error("Error fetching page analysis:", chrome.runtime.lastError.message);
@@ -63,10 +91,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                                     },
                                     (downloadId) => {
                                         if (chrome.runtime.lastError) {
-                                            console.error("Download error:", chrome.runtime.lastError.message);
+                                            console.error("Error initiating download:", chrome.runtime.lastError.message);
                                             sendResponse({ success: false, error: "Failed to download report." });
                                         } else {
-                                            console.log("Report download initiated with ID:", downloadId);
+                                            console.log("Report downloaded successfully. Download ID:", downloadId);
                                             sendResponse({ success: true });
                                         }
                                     }
@@ -74,73 +102,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             };
                             reader.readAsDataURL(blob);
                         } catch (error) {
-                            console.error("Error generating or downloading report:", error);
-                            sendResponse({ success: false, error: "Error generating report" });
+                            console.error("Error generating report:", error);
+                            sendResponse({ success: false, error: "Error generating report." });
                         }
                     } else {
-                        console.warn("No page analysis found in storage.");
-                        sendResponse({ error: "No page analysis found." });
+                        console.warn("No page analysis data found.");
+                        sendResponse({ success: false, error: "No data found." });
                     }
                 });
-                return true; // Keep the message channel open for async response
+                return true;
 
             default:
-                console.warn("Unknown message type received:", message.type);
-                sendResponse({ success: false, error: "Unknown message type" });
+                console.warn("Unknown message type:", message.type);
+                sendResponse({ success: false, error: "Unknown message type." });
         }
     } catch (error) {
-        console.error("Unexpected error in message handling:", error);
-        sendResponse({ success: false, error: "Unexpected error in background script" });
+        console.error("Unexpected error in background script:", error);
+        sendResponse({ success: false, error: "Unexpected error." });
     }
-
-    // if (message.action === "getThirdPartyCookies") {
-    //     chrome.cookies.getAll({}, allCookies => {
-    //         const thirdPartyCookies = allCookies
-    //             .filter(cookie => !cookie.domain.includes(sender.tab.url)) // Cookies not belonging to the current domain
-    //             .map(cookie => ({
-    //                 name: cookie.name,
-    //                 value: cookie.value,
-    //                 secure: cookie.secure,
-    //                 isSession: !cookie.expirationDate, // No expiration date implies a session cookie
-    //                 thirdParty: true,
-    //                 domain: cookie.domain,
-    //             }));
-
-    //         // Log third-party cookies before sending
-    //         console.log("Third-party cookies (background.js):", thirdPartyCookies);
-
-    //         // Ensure it's an array before sending
-    //         if (!Array.isArray(thirdPartyCookies)) {
-    //             console.warn("Expected an array but got:", thirdPartyCookies);
-    //             thirdPartyCookies = []; // Default to an empty array if not an array
-    //         }
-
-    //         sendResponse(thirdPartyCookies); // Send the response back
-    //     });
-
-    //     // Return true to keep the message channel open for asynchronous response
-    //     return true;
-    // } else {
-    //     sendResponse({ success: false, error: 'Unknown message type' });
-    // }      
-    
 });
 
-// Improved function to fetch script content with detailed error handling
+// Function to fetch script content
 async function fetchScriptContent(url) {
-    console.log("Fetching script content from:", url); // Log the URL being fetched
-
+    console.log("Fetching script content from URL:", url);
     try {
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`Failed to fetch script content: ${response.statusText} (Status: ${response.status})`);
+            throw new Error(`HTTP Error: ${response.statusText} (Status: ${response.status})`);
         }
         const scriptContent = await response.text();
         console.log("Script content fetched successfully.");
         return scriptContent;
     } catch (error) {
-        console.error("Error in fetchScriptContent function:", error);
-        return null; // Return null if an error occurs
+        console.error("Error in fetchScriptContent:", error);
+        return null;
     }
 }
 
@@ -277,10 +272,10 @@ function generateDetailedReport(data, pageURL) {
 
                 .cookie-status {
                     font-weight: bold;
-                    color: #fff;
                     padding: 2px 5px;
                     border-radius: 3px;
-                    display: inline-block;
+                    
+                    color: #fff;
                 }
 
                 .cookie-status.secure {
@@ -301,16 +296,6 @@ function generateDetailedReport(data, pageURL) {
                 .alert { 
                     color: red; 
                     font-weight: bold; 
-                }
-
-                .cookie-status.secure {
-                    color: green;
-                    font-weight: bold;
-                }
-
-                .cookie-status.insecure {
-                    color: red;
-                    font-weight: bold;
                 }
 
                 .none { 
@@ -418,6 +403,8 @@ function generateScriptLists(scripts) {
 }
 
 function generateCookieReport(cookies) {
+    console.log("Cookies received in generateCookieReport:", cookies);
+
     if (!cookies || cookies.length === 0) return "<p>No cookies detected.</p>";
 
     // Separate first-party and third-party cookies
@@ -430,12 +417,12 @@ function generateCookieReport(cookies) {
             <strong>Name:</strong> ${cookie.name || "N/A"}<br>
             <strong>Value:</strong> ${cookie.value || "N/A"}<br>
             <strong>Secure:</strong> ${cookie.secure ? "Yes" : "<span class='alert'>No</span>"}<br>
-            <strong>Session:</strong> ${cookie.isSession ? "Yes" : "No"}<br>
+            <strong>HttpOnly:</strong> ${cookie.httpOnly ? "Yes" : "No"}<br>
+            <strong>Session:</strong> ${cookie.session ? "Yes" : "No"}<br>
             <strong>Domain:</strong> ${cookie.domain || "N/A"}<br>
             <span class="cookie-status ${cookie.secure ? 'secure' : 'insecure'}">
                 ${cookie.secure ? 'Secure Cookie' : 'Insecure Cookie'}
             </span><br>
-            <strong>Third-Party:</strong> ${cookie.thirdParty ? "Yes" : "No"}<br>
         </div>`;
 
     // Generate sections for each type of cookie
@@ -449,10 +436,9 @@ function generateCookieReport(cookies) {
     return `
         <div class="cookie-report">
             ${firstPartyCookies.length > 0 ? cookieSection("First-Party Cookies", firstPartyCookies) : "<p>No first-party cookies detected.</p>"}
-            ${thirdPartyCookies.length > 0 ? cookieSection("Third-Party Cookies", thirdPartyCookies) : "<p>No third-party cookies detected.</p>"}
+            ${thirdPartyCookies.length > 0 ? cookieSection("Third-Party Cookies", thirdPartyCookies) : ""}
         </div>`;
 }
-
 
 
 

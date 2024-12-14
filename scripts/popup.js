@@ -57,18 +57,19 @@ document.addEventListener("DOMContentLoaded", () => {
         hideMessages(); // Clear existing messages
         displayLoadingMessage("Generating the report...");
 
-        chrome.runtime.sendMessage({ type: "downloadReport" }, (response) => {
+        // Send message to background.js to fetch the stored cookies and prepare the report
+        chrome.runtime.sendMessage({ type: "generateReport" }, (response) => {
             hideLoadingMessage();
 
             if (chrome.runtime.lastError) {
-                console.error("Error during report download:", chrome.runtime.lastError.message);
+                console.error("Error during report generation:", chrome.runtime.lastError.message);
                 displayErrorMessage("Failed to generate the report.");
                 return;
             }
 
             if (response && response.success) {
-                console.log("Report downloaded successfully.");
-                displaySuccessMessage("Report downloaded successfully.");
+                console.log("Report generated successfully.");
+                displaySuccessMessage("Report generated successfully.");
             } else {
                 console.error("Report generation failed.", response);
                 displayErrorMessage("Failed to generate the report. Please try again.");

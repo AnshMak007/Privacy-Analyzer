@@ -45,19 +45,52 @@ function collectScripts() {
     }));
 }
 
-// Function to collect cookies on the page
 function collectCookies() {
-    const cookies = document.cookie.split(";").filter(cookie => cookie.trim() !== ""); // Ensure no empty cookies
-    return cookies.map(cookie => {
-        const [name, ...rest] = cookie.split("=");
-        const value = rest.join("=").trim();
+    return new Promise((resolve, reject) => {
+        console.log("Requesting cookies for URL:", window.location.href); // Log the URL
 
-        return {
-            name: name.trim(),
-            value: value,
-            secure: document.location.protocol === "https:", // HTTPS indicates a secure context
-            isSession: !value.includes("=") && !value.includes(";"), // Guess if the cookie is session-based
-        };
+        chrome.runtime.sendMessage({ type: 'getCookies', url: window.location.href }, (cookies) => {
+            // Log the cookies received, or if the callback was called with no cookies
+            console.log("Cookies received in content script:", cookies);
+
+            // Handle errors from the runtime
+            if (chrome.runtime.lastError) {
+                console.error("Error fetching cookies:", chrome.runtime.lastError.message);
+                reject(new Error("Failed to fetch cookies: " + chrome.runtime.lastError.message));
+                return;
+            }
+
+            // Check if cookies are valid and log their type
+            if (!cookies) {
+                console.warn("No cookies received. Cookies might be undefined or null.");
+                resolve([]);
+                return;
+            }
+
+            console.log("Type of cookies received:", typeof cookies);
+            if (typeof cookies === "object" && !Array.isArray(cookies)) {
+                console.log("Inspecting object keys:", Object.keys(cookies));
+            }
+
+            // Check if cookies is an array and process them
+            if (Array.isArray(cookies) && cookies.length > 0) {
+                const cookieDetails = cookies.map(cookie => ({
+                    name: cookie.name,
+                    value: cookie.value,
+                    secure: cookie.secure,
+                    httpOnly: cookie.httpOnly,
+                    session: !cookie.expirationDate,
+                    domain: cookie.domain,
+                    thirdParty: cookie.thirdParty
+                }));
+
+                console.log("Processed cookie details:", cookieDetails); // Log processed cookies
+                resolve(cookieDetails);
+            } else {
+                console.warn("No cookies collected or cookies are not in the expected format.");
+                resolve([]); // Return an empty array if no cookies or incorrect format
+            }
+        });
     });
 }
 
@@ -352,8 +385,18 @@ async function analyzeScripts(scripts) {
 async function analyzePage(sendResponse) {
     try {
         const scripts = collectScripts();
-        const cookies = collectCookies();
+        console.log("Scripts collected:", scripts);
+
+        const cookies = await collectCookies();  // Await the promise
+        console.log("Cookies collected:", cookies);
+
+        if (!cookies || cookies.length === 0) {
+            console.warn("No cookies collected.");
+        }
+
         const trackers = await collectTrackers();
+        console.log("Trackers collected:", trackers);
+
         const trackerMappings = monitorNetworkRequests(trackers.map(t => t.domain));
 
         // Analyzing scripts for suspicious activity
@@ -361,6 +404,7 @@ async function analyzePage(sendResponse) {
 
         // Detect insecure cookies (cookies without secure flag)
         const insecureCookies = cookies.filter(cookie => !cookie.secure);
+        console.log("Insecure cookies:", insecureCookies);
 
         // Save all analysis data in local storage for later report generation
         chrome.storage.local.set({
@@ -370,7 +414,7 @@ async function analyzePage(sendResponse) {
                 cookies,
                 insecureCookies,
                 trackers,
-                trackerMappings, // Include tracker-to-script mappings
+                trackerMappings,  // Include tracker-to-script mappings
                 suspiciousActivity // Contains phishing, cookie theft, etc.
             }
         }, () => {
